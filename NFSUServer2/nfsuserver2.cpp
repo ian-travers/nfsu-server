@@ -2,6 +2,7 @@
 //
 #ifdef _WIN32
 	#pragma comment(lib, "ws2_32.lib")
+	#include <cwchar>
 #endif
 
 #include "win_nix.h"
@@ -2598,19 +2599,19 @@ VOID WINAPI ServiceCtrlHandler(DWORD dwControl)
 #endif
 
 bool InitServer(){
-#ifdef NT_SERVICE
-	EnableLogFile=GetPrivateProfileInt("NFSU:LAN", "EnableLogFile", 1, "nfsu.ini");
-	EnableLogScreen=false;
-	RewriteLogFile=GetPrivateProfileInt("NFSU:LAN", "RewriteLogFile", 1, "nfsu.ini");
-	DisableTimeStamp=GetPrivateProfileInt("NFSU:LAN", "DisableTimeStamp", 0, "nfsu.ini");
-	Verbose=GetPrivateProfileInt("NFSU:LAN", "Verbose", 0, "nfsu.ini");
-	RegisterGlobal=GetPrivateProfileInt("NFSU:LAN", "RegisterGlobal", 0, "nfsu.ini");
-	LogAllTraffic=GetPrivateProfileInt("NFSU:LAN", "LogAllTraffic", 0, "nfsu.ini");
-	BanV1=GetPrivateProfileInt("NFSU:LAN", "BanV1", 0, "nfsu.ini");
-	BanV2=GetPrivateProfileInt("NFSU:LAN", "BanV2", 0, "nfsu.ini");
-	BanV3=GetPrivateProfileInt("NFSU:LAN", "BanV3", 0, "nfsu.ini");
-	BanV4=GetPrivateProfileInt("NFSU:LAN", "BanV4", 0, "nfsu.ini");
-	GetPrivateProfileString("NFSU:LAN", "ServerName", "LAN Service server", Server.Name, 100, "nfsu.ini");
+#ifdef WIN32
+	EnableLogFile = GetPrivateProfileInt("NFSU:LAN", "EnableLogFile", 1, ".\\nfsu.ini");
+	EnableLogScreen = false;
+	RewriteLogFile = GetPrivateProfileInt("NFSU:LAN", "RewriteLogFile", 1, ".\\nfsu.ini");
+	DisableTimeStamp = GetPrivateProfileInt("NFSU:LAN", "DisableTimeStamp", 0, ".\\nfsu.ini");
+	Verbose = GetPrivateProfileInt("NFSU:LAN", "Verbose", 0, ".\\nfsu.ini");
+	RegisterGlobal = GetPrivateProfileInt("NFSU:LAN", "RegisterGlobal", 0, ".\\nfsu.ini");
+	LogAllTraffic = GetPrivateProfileInt("NFSU:LAN", "LogAllTraffic", 0, ".\\nfsu.ini");
+	BanV1 = GetPrivateProfileInt("NFSU:LAN", "BanV1", 0, ".\\nfsu.ini");
+	BanV2 = GetPrivateProfileInt("NFSU:LAN", "BanV2", 0, ".\\nfsu.ini");
+	BanV3 = GetPrivateProfileInt("NFSU:LAN", "BanV3", 0, ".\\nfsu.ini");
+	BanV4 = GetPrivateProfileInt("NFSU:LAN", "BanV4", 0, ".\\nfsu.ini");
+	GetPrivateProfileString("NFSU:LAN", "ServerName", "LAN Service server", Server.Name, 100, ".\\nfsu.ini");
 #endif
 
 	time(&curtime);
