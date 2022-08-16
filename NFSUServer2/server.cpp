@@ -1774,6 +1774,26 @@ bool sort_Points(StarsDrift a, StarsDrift b) {
 	return a.Points > b.Points;
 };
 
+bool sort_REP_All(PlayerStat a, PlayerStat b) {
+	return a.REP_All > b.REP_All;
+};
+
+bool sort_REP_Circ(PlayerStat a, PlayerStat b) {
+	return a.REP_Circ > b.REP_Circ;
+};
+
+bool sort_REP_Sprint(PlayerStat a, PlayerStat b) {
+	return a.REP_Sprint > b.REP_Sprint;
+};
+
+bool sort_REP_Drag(PlayerStat a, PlayerStat b) {
+	return a.REP_Drag > b.REP_Drag;
+};
+
+bool sort_REP_Drift(PlayerStat a, PlayerStat b) {
+	return a.REP_Drift > b.REP_Drift;
+};
+
 void UpdateBestTimes(const int track, const int dir, const char* name0, const int car, const int best_lap, const int best_drift) {
 
 	std::vector<StarsLap>::iterator it;
@@ -2628,5 +2648,6139 @@ void UpdateBestTimes(const int track, const int dir, const char* name0, const in
 	}
 	else {
 		Server.SaveStarsDrift(track);
+	}
+};
+
+void CalcStat(const char* reporter, const char* opp1, const char* opp2, const char* opp3,
+	const int count, const int type, const int track, const int laps, const int place, const int disc) {
+
+	std::vector<PlayerStat>::iterator tps;
+	int opps_rep, opps_rating, win_rep, lost_rep;
+	int tmp_rep = 0, tmp_rating = 0;
+	int save_stat_signal = 0;
+
+	switch (count) {
+	case 2:
+		switch (type) {
+		case 0:					// 2 players circuit 
+			// get opps REP and Ratings
+			if (opp1 != NULL) {
+				// if the opponent sent his REPT replica first, then his REP points have already decreased 
+				// and therefore win_rep will be calculated incorrectly.
+				// The solution is to take the REP from the stat.dat file, and save stat.dat 
+				// only after the winner's REPT replica
+				GetOppREP_Rating(opp1, type, tmp_rep, tmp_rating);
+				opps_rep = tmp_rep;
+				opps_rating = tmp_rating;
+			}
+			switch (laps) {
+			case 2:					// 2 players circuit 2 laps
+				switch (place) {
+				case 1:
+					// 2 players circuit 2 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = floor((opps_rep * 1.3 * 0.1) + 0.5);
+						}
+						else {
+							if (track == 1003) {
+								win_rep = floor((opps_rep * 1.1 * 0.1) + 0.5);
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = floor((opps_rep * 1.2 * 0.1) + 0.5);
+								}
+								else {
+									win_rep = floor((opps_rep * 0.1) + 0.5);
+								}
+							}
+						}
+					}
+					else {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = 13000;
+						}
+						else {
+							if (track == 1003) {
+								win_rep = 11000;
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = 12000;
+								}
+								else {
+									win_rep = 10000;
+								}
+							}
+						}
+					}
+					// find reporter in the vector
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					// update reporter statistics
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Circ = tps->Wins_Circ + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Circ = tps->REP_Circ + win_rep;
+					if (tps->REP_Circ > 99999999) tps->REP_Circ = 99999999;
+					break;
+				case 2:
+					// 2 players circuit 2 laps reporter 2nd place
+					// find reporter in the vector
+					tps = std::find(PS.begin(), PS.end(), reporter);
+
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					// update reporter statistics
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+					break;
+				}
+				// update reporter averages statistics
+				std::sort(PS.begin(), PS.end(), sort_REP_Circ);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Circ = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Circ = (tps->OppsREP_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rep) / (tps->Wins_Circ + tps->Loses_Circ);
+				tps->OppsRating_Circ = (tps->OppsRating_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rating) / (tps->Wins_Circ + tps->Loses_Circ);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 3:					// 2 players circuit 3 laps
+				switch (place) {
+				case 1:
+					// 2 players circuit 3 laps reporter 1st place
+					// set save stat.dat
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = floor((opps_rep * 1.4 * 0.1) + 0.5);
+						}
+						else {
+							if (track == 1003) {
+								win_rep = floor((opps_rep * 1.2 * 0.1) + 0.5);
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = floor((opps_rep * 1.3 * 0.1) + 0.5);
+								}
+								else {
+									win_rep = floor((opps_rep * 1.1 * 0.1) + 0.5);
+								}
+							}
+						}
+					}
+					else {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = 14000;
+						}
+						else {
+							if (track == 1003) {
+								win_rep = 12000;
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = 13000;
+								}
+								else {
+									win_rep = 11000;
+								}
+							}
+						}
+					}
+					// find reporter in the vector
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					// update reporter statistics
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Circ = tps->Wins_Circ + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Circ = tps->REP_Circ + win_rep;
+					if (tps->REP_Circ > 99999999) tps->REP_Circ = 99999999;
+					break;
+				case 2:
+					// 2 players circuit 3 laps reporter 2nd place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Circ);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Circ = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Circ = (tps->OppsREP_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rep) / (tps->Wins_Circ + tps->Loses_Circ);
+				tps->OppsRating_Circ = (tps->OppsRating_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rating) / (tps->Wins_Circ + tps->Loses_Circ);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 4:				// 2 players circuit 4 laps
+				switch (place) {
+				case 1:
+					// 2 players circuit 4 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = floor((opps_rep * 1.5 * 0.1) + 0.5);
+						}
+						else {
+							if (track == 1003) {
+								win_rep = floor((opps_rep * 1.3 * 0.1) + 0.5);
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = floor((opps_rep * 1.4 * 0.1) + 0.5);
+								}
+								else {
+									win_rep = floor((opps_rep * 1.2 * 0.1) + 0.5);
+								}
+							}
+						}
+					}
+					else {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = 15000;
+						}
+						else {
+							if (track == 1003) {
+								win_rep = 13000;
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = 14000;
+								}
+								else {
+									win_rep = 12000;
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Circ = tps->Wins_Circ + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Circ = tps->REP_Circ + win_rep;
+					if (tps->REP_Circ > 99999999) tps->REP_Circ = 99999999;
+					break;
+				case 2:
+					// 2 players circuit 4 laps reporter 2nd place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Circ);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Circ = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Circ = (tps->OppsREP_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rep) / (tps->Wins_Circ + tps->Loses_Circ);
+				tps->OppsRating_Circ = (tps->OppsRating_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rating) / (tps->Wins_Circ + tps->Loses_Circ);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 5:					// 2 players circuit 5 laps
+				switch (place) {
+				case 1:
+					// 2 players circuit 5 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = floor((opps_rep * 2 * 0.1) + 0.5);
+						}
+						else {
+							if (track == 1003) {
+								win_rep = floor((opps_rep * 1.8 * 0.1) + 0.5);
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = floor((opps_rep * 1.9 * 0.1) + 0.5);
+								}
+								else {
+									win_rep = floor((opps_rep * 1.7 * 0.1) + 0.5);
+								}
+							}
+						}
+					}
+					else {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = 20000;
+						}
+						else {
+							if (track == 1003) {
+								win_rep = 18000;
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = 19000;
+								}
+								else {
+									win_rep = 17000;
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Circ = tps->Wins_Circ + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Circ = tps->REP_Circ + win_rep;
+					if (tps->REP_Circ > 99999999) tps->REP_Circ = 99999999;
+
+					break;
+				case 2:
+					// 2 players circuit 5 laps reporter 2nd place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Circ);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Circ = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Circ = (tps->OppsREP_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rep) / (tps->Wins_Circ + tps->Loses_Circ);
+				tps->OppsRating_Circ = (tps->OppsRating_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rating) / (tps->Wins_Circ + tps->Loses_Circ);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 6:					// 2 players circuit 6 laps
+				switch (place) {
+				case 1:
+					// 2 players circuit 6 laps reporter 1st place
+					save_stat_signal = 1;
+
+					if (opps_rep < 100000) {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = floor((opps_rep * 2.5 * 0.1) + 0.5);
+						}
+						else {
+							if (track == 1003) {
+								win_rep = floor((opps_rep * 2.3 * 0.1) + 0.5);
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = floor((opps_rep * 2.4 * 0.1) + 0.5);
+								}
+								else {
+									win_rep = floor((opps_rep * 2.2 * 0.1) + 0.5);
+								}
+							}
+						}
+					}
+					else {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = 25000;
+						}
+						else {
+							if (track == 1003) {
+								win_rep = 23000;
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = 24000;
+								}
+								else {
+									win_rep = 22000;
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Circ = tps->Wins_Circ + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Circ = tps->REP_Circ + win_rep;
+					if (tps->REP_Circ > 99999999) tps->REP_Circ = 99999999;
+
+					break;
+				case 2:
+					// 2 players circuit 6 laps reporter 2nd place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Circ);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Circ = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Circ = (tps->OppsREP_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rep) / (tps->Wins_Circ + tps->Loses_Circ);
+				tps->OppsRating_Circ = (tps->OppsRating_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rating) / (tps->Wins_Circ + tps->Loses_Circ);
+
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 7:					// 2 players circuit 7 laps
+				switch (place) {
+				case 1:
+					// 2 players circuit 7 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = floor((opps_rep * 3 * 0.1) + 0.5);
+						}
+						else {
+							if (track == 1003) {
+								win_rep = floor((opps_rep * 2.8 * 0.1) + 0.5);
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = floor((opps_rep * 2.9 * 0.1) + 0.5);
+								}
+								else {
+									win_rep = floor((opps_rep * 2.7 * 0.1) + 0.5);
+								}
+							}
+						}
+					}
+					else {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = 30000;
+						}
+						else {
+							if (track == 1003) {
+								win_rep = 28000;
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = 29000;
+								}
+								else {
+									win_rep = 27000;
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Circ = tps->Wins_Circ + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Circ = tps->REP_Circ + win_rep;
+					if (tps->REP_Circ > 99999999) tps->REP_Circ = 99999999;
+
+					break;
+				case 2:
+					// 2 players circuit 7 laps reporter 2nd place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Circ);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Circ = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Circ = (tps->OppsREP_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rep) / (tps->Wins_Circ + tps->Loses_Circ);
+				tps->OppsRating_Circ = (tps->OppsRating_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rating) / (tps->Wins_Circ + tps->Loses_Circ);
+
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+
+				break;
+			case 8:					// 2 players circuit 8 laps
+				switch (place) {
+				case 1:
+					// 2 players circuit 8 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = floor((opps_rep * 3.5 * 0.1) + 0.5);
+						}
+						else {
+							if (track == 1003) {
+								win_rep = floor((opps_rep * 3.3 * 0.1) + 0.5);
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = floor((opps_rep * 3.4 * 0.1) + 0.5);
+								}
+								else {
+									win_rep = floor((opps_rep * 3.2 * 0.1) + 0.5);
+								}
+							}
+						}
+					}
+					else {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = 35000;
+						}
+						else {
+							if (track == 1003) {
+								win_rep = 33000;
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = 34000;
+								}
+								else {
+									win_rep = 32000;
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Circ = tps->Wins_Circ + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Circ = tps->REP_Circ + win_rep;
+					if (tps->REP_Circ > 99999999) tps->REP_Circ = 99999999;
+					break;
+				case 2:
+					// 2 players circuit 8 laps reporter 2nd place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Circ);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Circ = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Circ = (tps->OppsREP_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rep) / (tps->Wins_Circ + tps->Loses_Circ);
+				tps->OppsRating_Circ = (tps->OppsRating_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rating) / (tps->Wins_Circ + tps->Loses_Circ);
+
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 9:					// 2 players circuit 9 laps
+				switch (place) {
+				case 1:
+					// 2 players circuit 9 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = floor((opps_rep * 4 * 0.1) + 0.5);
+						}
+						else {
+							if (track == 1003) {
+								win_rep = floor((opps_rep * 3.8 * 0.1) + 0.5);
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = floor((opps_rep * 3.9 * 0.1) + 0.5);
+								}
+								else {
+									win_rep = floor((opps_rep * 3.7 * 0.1) + 0.5);
+								}
+							}
+						}
+					}
+					else {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = 40000;
+						}
+						else {
+							if (track == 1003) {
+								win_rep = 38000;
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = 39000;
+								}
+								else {
+									win_rep = 37000;
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Circ = tps->Wins_Circ + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Circ = tps->REP_Circ + win_rep;
+					if (tps->REP_Circ > 99999999) tps->REP_Circ = 99999999;
+					break;
+				case 2:
+					// 2 players circuit 9 laps reporter 2nd place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Circ);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Circ = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Circ = (tps->OppsREP_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rep) / (tps->Wins_Circ + tps->Loses_Circ);
+				tps->OppsRating_Circ = (tps->OppsRating_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rating) / (tps->Wins_Circ + tps->Loses_Circ);
+
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 10:				// 2 players circuit 10 laps
+				switch (place) {
+				case 1:
+					// 2 players circuit 10 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = floor((opps_rep * 4.5 * 0.1) + 0.5);
+						}
+						else {
+							if (track == 1003) {
+								win_rep = floor((opps_rep * 4.3 * 0.1) + 0.5);
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = floor((opps_rep * 4.4 * 0.1) + 0.5);
+								}
+								else {
+									win_rep = floor((opps_rep * 4.2 * 0.1) + 0.5);
+								}
+							}
+						}
+					}
+					else {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = 45000;
+						}
+						else {
+							if (track == 1003) {
+								win_rep = 43000;
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = 44000;
+								}
+								else {
+									win_rep = 42000;
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Circ = tps->Wins_Circ + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Circ = tps->REP_Circ + win_rep;
+					if (tps->REP_Circ > 99999999) tps->REP_Circ = 99999999;
+					break;
+				case 2:
+					// 2 players circuit 10 laps reporter 2nd place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Circ);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Circ = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Circ = (tps->OppsREP_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rep) / (tps->Wins_Circ + tps->Loses_Circ);
+				tps->OppsRating_Circ = (tps->OppsRating_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rating) / (tps->Wins_Circ + tps->Loses_Circ);
+
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			}
+			break;
+		case 1:						// 2 players sprint 
+			if (opp1 != NULL) {
+				GetOppREP_Rating(opp1, type, tmp_rep, tmp_rating);
+				opps_rep = tmp_rep;
+				opps_rating = tmp_rating;
+			}
+
+			switch (place) {
+			case 1:
+				// 2 players sprint reporter 1st place
+				save_stat_signal = 1;
+				if (opps_rep < 100000) {
+					if (track == 1102) {
+						win_rep = floor((opps_rep * 0.1) + 0.5);
+					}
+					else {
+						if ((track == 1104) || (track == 1105) || (track == 1106)) {
+							win_rep = floor((opps_rep * 1.2 * 0.1) + 0.5);
+						}
+						else {
+							if (track == 1107) {
+								win_rep = floor((opps_rep * 1.4 * 0.1) + 0.5);
+							}
+							else {
+								win_rep = floor((opps_rep * 1.1 * 0.1) + 0.5);
+							}
+						}
+					}
+				}
+				else {
+					if (track == 1102) {
+						win_rep = 10000;
+					}
+					else {
+						if ((track == 1104) || (track == 1105) || (track == 1106)) {
+							win_rep = 12000;
+						}
+						else {
+							if (track == 1107) {
+								win_rep = 14000;
+							}
+							else {
+								win_rep = 11000;
+							}
+						}
+					}
+				}
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Wins_All = tps->Wins_All + 1;
+				tps->Wins_Sprint = tps->Wins_Sprint + 1;
+				tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+				if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+				tps->REP_Sprint = tps->REP_Sprint + win_rep;
+				if (tps->REP_Circ > 99999999) tps->REP_Sprint = 99999999;
+				break;
+			case 2:
+				// 2 players sprint reporter 2nd place
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				if (tps->REP_Sprint < 200000) {
+					lost_rep = floor((tps->REP_Sprint * 0.1) + 0.5);
+				}
+				else {
+					lost_rep = 20000;
+				}
+				tps->Loses_All = tps->Loses_All + 1;
+				tps->Loses_Sprint = tps->Loses_Sprint + 1;
+				if (disc == -1) {
+					tps->Disc_All = tps->Disc_All + 1;
+					tps->Disc_Sprint = tps->Disc_Sprint + 1;
+				}
+				tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+				if (tps->REP_All < 100) tps->REP_All = 100;
+				tps->REP_Sprint = tps->REP_Sprint - lost_rep;
+				if (tps->REP_Sprint < 100) tps->REP_Sprint = 100;
+				break;
+			}
+			std::sort(PS.begin(), PS.end(), sort_REP_Sprint);
+			tps = std::find(PS.begin(), PS.end(), reporter);
+			tps->Rating_Sprint = std::distance(PS.begin(), tps) + 1;
+			tps->OppsREP_Sprint = (tps->OppsREP_Sprint * (tps->Wins_Sprint + tps->Loses_Sprint - 1) + opps_rep) / (tps->Wins_Sprint + tps->Loses_Sprint);
+			tps->OppsRating_Sprint = (tps->OppsRating_Sprint * (tps->Wins_Sprint + tps->Loses_Sprint - 1) + opps_rating) / (tps->Wins_Sprint + tps->Loses_Sprint);
+			std::sort(PS.begin(), PS.end(), sort_REP_All);
+			tps = std::find(PS.begin(), PS.end(), reporter);
+			tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+			tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep) / (tps->Wins_All + tps->Loses_All);
+			tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+			if (save_stat_signal) Server.SaveStat();
+			break;
+		case 2:						// 2 players drag
+			if (opp1 != NULL) {
+				GetOppREP_Rating(opp1, type, tmp_rep, tmp_rating);
+				opps_rep = tmp_rep;
+				opps_rating = tmp_rating;
+			}
+			switch (place) {
+			case 1:
+				// 2 players drag reporter 1st place
+				save_stat_signal = 1;
+				if (opps_rep < 100000) {
+					win_rep = floor((opps_rep * 0.1) + 0.5);
+				}
+				else {
+					win_rep = 10000;
+				}
+				// find reporter in the vector
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Wins_All = tps->Wins_All + 1;
+				tps->Wins_Drag = tps->Wins_Drag + 1;
+				tps->REP_Drag = tps->REP_Drag + win_rep;
+				if (tps->REP_Drag > 99999999) tps->REP_Drag = 99999999;
+				tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+				if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+
+				break;
+			case 2:
+				// 2 players drag reporter 2nd place
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				if (tps->REP_Drag < 200000) {
+					lost_rep = floor((tps->REP_Drag * 0.1) + 0.5);
+				}
+				else {
+					lost_rep = 20000;
+				}
+				tps->Loses_All = tps->Loses_All + 1;
+				tps->Loses_Drag = tps->Loses_Drag + 1;
+				if (disc == -1) {
+					tps->Disc_All = tps->Disc_All + 1;
+					tps->Disc_Drag = tps->Disc_Drag + 1;
+				}
+				tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+				if (tps->REP_All < 100) tps->REP_All = 100;
+				tps->REP_Drag = tps->REP_Drag - lost_rep;
+				if (tps->REP_Drag < 100) tps->REP_Drag = 100;
+
+				break;
+			}
+			std::sort(PS.begin(), PS.end(), sort_REP_Drag);
+			tps = std::find(PS.begin(), PS.end(), reporter);
+			tps->Rating_Drag = std::distance(PS.begin(), tps) + 1;
+			tps->OppsREP_Drag = (tps->OppsREP_Drag * (tps->Wins_Drag + tps->Loses_Drag - 1) + opps_rep) / (tps->Wins_Drag + tps->Loses_Drag);
+			tps->OppsRating_Drag = (tps->OppsRating_Drag * (tps->Wins_Drag + tps->Loses_Drag - 1) + opps_rating) / (tps->Wins_Drag + tps->Loses_Drag);
+
+			std::sort(PS.begin(), PS.end(), sort_REP_All);
+			tps = std::find(PS.begin(), PS.end(), reporter);
+			tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+			tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep) / (tps->Wins_All + tps->Loses_All);
+			tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+			if (save_stat_signal) Server.SaveStat();
+			break;
+		case 3:						// 2 players drift
+			if (opp1 != NULL) {
+				GetOppREP_Rating(opp1, type, tmp_rep, tmp_rating);
+				opps_rep = tmp_rep;
+				opps_rating = tmp_rating;
+			}
+			switch (laps) {
+			case 2:					// 2 players drift 2 laps
+				switch (place) {
+				case 1:
+					// 2 players drift 2 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if (track == 1301) {
+							win_rep = floor((opps_rep * 0.1) + 0.5);
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = floor((opps_rep * 1.1 * 0.1) + 0.5);
+							}
+							else {
+								if (track == 1304) {
+									win_rep = floor((opps_rep * 1.2 * 0.1) + 0.5);
+								}
+								else {
+									if (track == 1306) {
+										win_rep = floor((opps_rep * 1.4 * 0.1) + 0.5);
+									}
+									else {
+										win_rep = floor((opps_rep * 1.3 * 0.1) + 0.5);
+									}
+								}
+							}
+						}
+					}
+					else {
+						if (track == 1301) {
+							win_rep = 10000;
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = 11000;
+							}
+							else {
+								if (track == 1304) {
+									win_rep = 12000;
+								}
+								else {
+									if (track == 1306) {
+										win_rep = 14000;
+									}
+									else {
+										win_rep = 13000;
+									}
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Drift = tps->Wins_Drift + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Drift = tps->REP_Drift + win_rep;
+					if (tps->REP_Drift > 99999999) tps->REP_Drift = 99999999;
+
+					break;
+				case 2:
+					// 2 players drift 2 laps reporter 2nd place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Drift);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Drift = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Drift = (tps->OppsREP_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rep) / (tps->Wins_Drift + tps->Loses_Drift);
+				tps->OppsRating_Drift = (tps->OppsRating_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rating) / (tps->Wins_Drift + tps->Loses_Drift);
+
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 3:					// 2 players drift 3 laps
+				switch (place) {
+				case 1:
+					// 2 players drift 3 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if (track == 1301) {
+							win_rep = floor((opps_rep * 1.1 * 0.1) + 0.5);
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = floor((opps_rep * 1.2 * 0.1) + 0.5);
+							}
+							else {
+								if (track == 1304) {
+									win_rep = floor((opps_rep * 1.3 * 0.1) + 0.5);
+								}
+								else {
+									if (track == 1306) {
+										win_rep = floor((opps_rep * 1.5 * 0.1) + 0.5);
+									}
+									else {
+										win_rep = floor((opps_rep * 1.4 * 0.1) + 0.5);
+									}
+								}
+							}
+						}
+					}
+					else {
+						if (track == 1301) {
+							win_rep = 11000;
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = 12000;
+							}
+							else {
+								if (track == 1304) {
+									win_rep = 13000;
+								}
+								else {
+									if (track == 1306) {
+										win_rep = 15000;
+									}
+									else {
+										win_rep = 14000;
+									}
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Drift = tps->Wins_Drift + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Drift = tps->REP_Drift + win_rep;
+					if (tps->REP_Drift > 99999999) tps->REP_Drift = 99999999;
+
+					break;
+				case 2:
+					// 2 players drift 3 laps reporter 2nd place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Drift);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Drift = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Drift = (tps->OppsREP_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rep) / (tps->Wins_Drift + tps->Loses_Drift);
+				tps->OppsRating_Drift = (tps->OppsRating_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rating) / (tps->Wins_Drift + tps->Loses_Drift);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 4:					// 2 players drift 4 laps
+				switch (place) {
+				case 1:
+					// 2 players drift 4 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if (track == 1301) {
+							win_rep = floor((opps_rep * 1.2 * 0.1) + 0.5);
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = floor((opps_rep * 1.3 * 0.1) + 0.5);
+							}
+							else {
+								if (track == 1304) {
+									win_rep = floor((opps_rep * 1.4 * 0.1) + 0.5);
+								}
+								else {
+									if (track == 1306) {
+										win_rep = floor((opps_rep * 1.6 * 0.1) + 0.5);
+									}
+									else {
+										win_rep = floor((opps_rep * 1.5 * 0.1) + 0.5);
+									}
+								}
+							}
+						}
+					}
+					else {
+						if (track == 1301) {
+							win_rep = 12000;
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = 13000;
+							}
+							else {
+								if (track == 1304) {
+									win_rep = 14000;
+								}
+								else {
+									if (track == 1306) {
+										win_rep = 16000;
+									}
+									else {
+										win_rep = 15000;
+									}
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Drift = tps->Wins_Drift + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Drift = tps->REP_Drift + win_rep;
+					if (tps->REP_Drift > 99999999) tps->REP_Drift = 99999999;
+
+					break;
+				case 2:
+					// 2 players drift 4 laps reporter 2nd place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Drift);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Drift = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Drift = (tps->OppsREP_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rep) / (tps->Wins_Drift + tps->Loses_Drift);
+				tps->OppsRating_Drift = (tps->OppsRating_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rating) / (tps->Wins_Drift + tps->Loses_Drift);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 5:					// 2 players drift 5 laps
+				switch (place) {
+				case 1:
+					// 2 players drift 5 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if (track == 1301) {
+							win_rep = floor((opps_rep * 1.7 * 0.1) + 0.5);
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = floor((opps_rep * 1.8 * 0.1) + 0.5);
+							}
+							else {
+								if (track == 1304) {
+									win_rep = floor((opps_rep * 1.9 * 0.1) + 0.5);
+								}
+								else {
+									if (track == 1306) {
+										win_rep = floor((opps_rep * 2.1 * 0.1) + 0.5);
+									}
+									else {
+										win_rep = floor((opps_rep * 2 * 0.1) + 0.5);
+									}
+								}
+							}
+						}
+					}
+					else {
+						if (track == 1301) {
+							win_rep = 17000;
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = 18000;
+							}
+							else {
+								if (track == 1304) {
+									win_rep = 19000;
+								}
+								else {
+									if (track == 1306) {
+										win_rep = 21000;
+									}
+									else {
+										win_rep = 20000;
+									}
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Drift = tps->Wins_Drift + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Drift = tps->REP_Drift + win_rep;
+					if (tps->REP_Drift > 99999999) tps->REP_Drift = 99999999;
+
+					break;
+				case 2:
+					// 2 players drift 5 laps reporter 2nd place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Drift);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Drift = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Drift = (tps->OppsREP_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rep) / (tps->Wins_Drift + tps->Loses_Drift);
+				tps->OppsRating_Drift = (tps->OppsRating_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rating) / (tps->Wins_Drift + tps->Loses_Drift);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 6:					// 2 players drift 6 laps
+				switch (place) {
+				case 1:
+					// 2 players drift 6 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if (track == 1301) {
+							win_rep = floor((opps_rep * 2.2 * 0.1) + 0.5);
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = floor((opps_rep * 2.3 * 0.1) + 0.5);
+							}
+							else {
+								if (track == 1304) {
+									win_rep = floor((opps_rep * 2.4 * 0.1) + 0.5);
+								}
+								else {
+									if (track == 1306) {
+										win_rep = floor((opps_rep * 2.6 * 0.1) + 0.5);
+									}
+									else {
+										win_rep = floor((opps_rep * 2.5 * 0.1) + 0.5);
+									}
+								}
+							}
+						}
+					}
+					else {
+						if (track == 1301) {
+							win_rep = 22000;
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = 23000;
+							}
+							else {
+								if (track == 1304) {
+									win_rep = 24000;
+								}
+								else {
+									if (track == 1306) {
+										win_rep = 26000;
+									}
+									else {
+										win_rep = 25000;
+									}
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Drift = tps->Wins_Drift + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Drift = tps->REP_Drift + win_rep;
+					if (tps->REP_Drift > 99999999) tps->REP_Drift = 99999999;
+
+					break;
+				case 2:
+					// 2 players drift 6 laps reporter 2nd place
+					save_stat_signal = 0;
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Drift);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Drift = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Drift = (tps->OppsREP_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rep) / (tps->Wins_Drift + tps->Loses_Drift);
+				tps->OppsRating_Drift = (tps->OppsRating_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rating) / (tps->Wins_Drift + tps->Loses_Drift);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 7:					// 2 players drift 7 laps
+				switch (place) {
+				case 1:
+					// 2 players drift 7 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if (track == 1301) {
+							win_rep = floor((opps_rep * 2.7 * 0.1) + 0.5);
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = floor((opps_rep * 2.8 * 0.1) + 0.5);
+							}
+							else {
+								if (track == 1304) {
+									win_rep = floor((opps_rep * 2.9 * 0.1) + 0.5);
+								}
+								else {
+									if (track == 1306) {
+										win_rep = floor((opps_rep * 3.1 * 0.1) + 0.5);
+									}
+									else {
+										win_rep = floor((opps_rep * 3 * 0.1) + 0.5);
+									}
+								}
+							}
+						}
+					}
+					else {
+						if (track == 1301) {
+							win_rep = 11000;
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = 12000;
+							}
+							else {
+								if (track == 1304) {
+									win_rep = 13000;
+								}
+								else {
+									if (track == 1306) {
+										win_rep = 15000;
+									}
+									else {
+										win_rep = 14000;
+									}
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Drift = tps->Wins_Drift + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Drift = tps->REP_Drift + win_rep;
+					if (tps->REP_Drift > 99999999) tps->REP_Drift = 99999999;
+
+					break;
+				case 2:
+					// 2 players drift 7 laps reporter 2nd place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Drift);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Drift = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Drift = (tps->OppsREP_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rep) / (tps->Wins_Drift + tps->Loses_Drift);
+				tps->OppsRating_Drift = (tps->OppsRating_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rating) / (tps->Wins_Drift + tps->Loses_Drift);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 8:					// 2 players drift 8 laps
+				switch (place) {
+				case 1:
+					// 2 players drift 8 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if (track == 1301) {
+							win_rep = floor((opps_rep * 3.2 * 0.1) + 0.5);
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = floor((opps_rep * 3.3 * 0.1) + 0.5);
+							}
+							else {
+								if (track == 1304) {
+									win_rep = floor((opps_rep * 3.4 * 0.1) + 0.5);
+								}
+								else {
+									if (track == 1306) {
+										win_rep = floor((opps_rep * 3.6 * 0.1) + 0.5);
+									}
+									else {
+										win_rep = floor((opps_rep * 3.5 * 0.1) + 0.5);
+									}
+								}
+							}
+						}
+					}
+					else {
+						if (track == 1301) {
+							win_rep = 32000;
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = 33000;
+							}
+							else {
+								if (track == 1304) {
+									win_rep = 34000;
+								}
+								else {
+									if (track == 1306) {
+										win_rep = 36000;
+									}
+									else {
+										win_rep = 35000;
+									}
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Drift = tps->Wins_Drift + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Drift = tps->REP_Drift + win_rep;
+					if (tps->REP_Drift > 99999999) tps->REP_Drift = 99999999;
+
+					break;
+				case 2:
+					// 2 players drift 8 laps reporter 2nd place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Drift);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Drift = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Drift = (tps->OppsREP_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rep) / (tps->Wins_Drift + tps->Loses_Drift);
+				tps->OppsRating_Drift = (tps->OppsRating_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rating) / (tps->Wins_Drift + tps->Loses_Drift);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 9:					// 2 players drift 9 laps
+				switch (place) {
+				case 1:
+					// 2 players drift 9 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if (track == 1301) {
+							win_rep = floor((opps_rep * 3.7 * 0.1) + 0.5);
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = floor((opps_rep * 3.8 * 0.1) + 0.5);
+							}
+							else {
+								if (track == 1304) {
+									win_rep = floor((opps_rep * 3.9 * 0.1) + 0.5);
+								}
+								else {
+									if (track == 1306) {
+										win_rep = floor((opps_rep * 4.1 * 0.1) + 0.5);
+									}
+									else {
+										win_rep = floor((opps_rep * 4 * 0.1) + 0.5);
+									}
+								}
+							}
+						}
+					}
+					else {
+						if (track == 1301) {
+							win_rep = 37000;
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = 38000;
+							}
+							else {
+								if (track == 1304) {
+									win_rep = 39000;
+								}
+								else {
+									if (track == 1306) {
+										win_rep = 41000;
+									}
+									else {
+										win_rep = 40000;
+									}
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Drift = tps->Wins_Drift + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Drift = tps->REP_Drift + win_rep;
+					if (tps->REP_Drift > 99999999) tps->REP_Drift = 99999999;
+
+					break;
+				case 2:
+					// 2 players drift 9 laps reporter 2nd place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Drift);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Drift = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Drift = (tps->OppsREP_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rep) / (tps->Wins_Drift + tps->Loses_Drift);
+				tps->OppsRating_Drift = (tps->OppsRating_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rating) / (tps->Wins_Drift + tps->Loses_Drift);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+
+				break;
+			case 10:				// 2 players drift 10 laps
+				switch (place) {
+				case 1:
+					// 2 players drift 10 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if (track == 1301) {
+							win_rep = floor((opps_rep * 4.2 * 0.1) + 0.5);
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = floor((opps_rep * 4.3 * 0.1) + 0.5);
+							}
+							else {
+								if (track == 1304) {
+									win_rep = floor((opps_rep * 4.4 * 0.1) + 0.5);
+								}
+								else {
+									if (track == 1306) {
+										win_rep = floor((opps_rep * 4.6 * 0.1) + 0.5);
+									}
+									else {
+										win_rep = floor((opps_rep * 4.5 * 0.1) + 0.5);
+									}
+								}
+							}
+						}
+					}
+					else {
+						if (track == 1301) {
+							win_rep = 42000;
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = 43000;
+							}
+							else {
+								if (track == 1304) {
+									win_rep = 44000;
+								}
+								else {
+									if (track == 1306) {
+										win_rep = 46000;
+									}
+									else {
+										win_rep = 45000;
+									}
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Drift = tps->Wins_Drift + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Drift = tps->REP_Drift + win_rep;
+					if (tps->REP_Drift > 99999999) tps->REP_Drift = 99999999;
+
+					break;
+				case 2:
+					// 2 players drift 10 laps reporter 2nd place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Drift);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Drift = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Drift = (tps->OppsREP_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rep) / (tps->Wins_Drift + tps->Loses_Drift);
+				tps->OppsRating_Drift = (tps->OppsRating_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rating) / (tps->Wins_Drift + tps->Loses_Drift);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			}
+			break;
+		}
+		break;
+	case 3:
+		switch (type) {
+		case 0:					// 3 players circuit 
+			// get opps REP and Ratings
+			if (opp1 != NULL) {
+				GetOppREP_Rating(opp1, type, tmp_rep, tmp_rating);
+				opps_rep = tmp_rep;
+				opps_rating = tmp_rating;
+			}
+			if (opp2 != NULL) {
+				GetOppREP_Rating(opp2, type, tmp_rep, tmp_rating);
+				opps_rep = opps_rep + tmp_rep;
+				opps_rating = (opps_rating + tmp_rating) / 2;
+			}
+			switch (laps) {
+			case 2:					// 3 players circuit 2 laps
+				switch (place) {
+				case 1:
+					// 3 players circuit 2 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = floor((opps_rep * 1.3 * 0.1) + 0.5);
+						}
+						else {
+							if (track == 1003) {
+								win_rep = floor((opps_rep * 1.1 * 0.1) + 0.5);
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = floor((opps_rep * 1.2 * 0.1) + 0.5);
+								}
+								else {
+									win_rep = floor((opps_rep * 0.1) + 0.5);
+								}
+							}
+						}
+					}
+					else {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = 13000;
+						}
+						else {
+							if (track == 1003) {
+								win_rep = 11000;
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = 12000;
+								}
+								else {
+									win_rep = 10000;
+								}
+							}
+						}
+					}
+					// find reporter in the vector
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					// update reporter statistics
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Circ = tps->Wins_Circ + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Circ = tps->REP_Circ + win_rep;
+					if (tps->REP_Circ > 99999999) tps->REP_Circ = 99999999;
+					break;
+				case 2:
+					// update bit of stat 
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					break;
+				case 3:
+					// 3 players circuit 2 laps reporter 3 place
+					// find reporter in the vector
+					tps = std::find(PS.begin(), PS.end(), reporter);
+
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					// update reporter statistics
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+					break;
+				}
+				// update reporter averages statistics
+				std::sort(PS.begin(), PS.end(), sort_REP_Circ);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Circ = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Circ = (tps->OppsREP_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rep / 2) / (tps->Wins_Circ + tps->Loses_Circ);
+				tps->OppsRating_Circ = (tps->OppsRating_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rating) / (tps->Wins_Circ + tps->Loses_Circ);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 2) + opps_rep / 2) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 2) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 3:					// 3 players circuit 3 laps
+				switch (place) {
+				case 1:
+					// 3 players circuit 3 laps reporter 1st place
+					// set save stat.dat
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = floor((opps_rep * 1.4 * 0.1) + 0.5);
+						}
+						else {
+							if (track == 1003) {
+								win_rep = floor((opps_rep * 1.2 * 0.1) + 0.5);
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = floor((opps_rep * 1.3 * 0.1) + 0.5);
+								}
+								else {
+									win_rep = floor((opps_rep * 1.1 * 0.1) + 0.5);
+								}
+							}
+						}
+					}
+					else {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = 14000;
+						}
+						else {
+							if (track == 1003) {
+								win_rep = 12000;
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = 13000;
+								}
+								else {
+									win_rep = 11000;
+								}
+							}
+						}
+					}
+					// find reporter in the vector
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					// update reporter statistics
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Circ = tps->Wins_Circ + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Circ = tps->REP_Circ + win_rep;
+					if (tps->REP_Circ > 99999999) tps->REP_Circ = 99999999;
+					break;
+				case 2:
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					break;
+				case 3:
+					// 3 players circuit 3 laps reporter 3rd place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Circ);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Circ = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Circ = (tps->OppsREP_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rep / 2) / (tps->Wins_Circ + tps->Loses_Circ);
+				tps->OppsRating_Circ = (tps->OppsRating_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rating) / (tps->Wins_Circ + tps->Loses_Circ);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 2) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 4:				// 3 players circuit 4 laps
+				switch (place) {
+				case 1:
+					// 3 players circuit 4 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = floor((opps_rep * 1.5 * 0.1) + 0.5);
+						}
+						else {
+							if (track == 1003) {
+								win_rep = floor((opps_rep * 1.3 * 0.1) + 0.5);
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = floor((opps_rep * 1.4 * 0.1) + 0.5);
+								}
+								else {
+									win_rep = floor((opps_rep * 1.2 * 0.1) + 0.5);
+								}
+							}
+						}
+					}
+					else {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = 15000;
+						}
+						else {
+							if (track == 1003) {
+								win_rep = 13000;
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = 14000;
+								}
+								else {
+									win_rep = 12000;
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Circ = tps->Wins_Circ + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Circ = tps->REP_Circ + win_rep;
+					if (tps->REP_Circ > 99999999) tps->REP_Circ = 99999999;
+					break;
+				case 2:
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					break;
+				case 3:
+					// 3 players circuit 4 laps reporter 3 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Circ);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Circ = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Circ = (tps->OppsREP_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rep / 2) / (tps->Wins_Circ + tps->Loses_Circ);
+				tps->OppsRating_Circ = (tps->OppsRating_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rating) / (tps->Wins_Circ + tps->Loses_Circ);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 2) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 5:					// 3 players circuit 5 laps
+				switch (place) {
+				case 1:
+					// 3 players circuit 5 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = floor((opps_rep * 2 * 0.1) + 0.5);
+						}
+						else {
+							if (track == 1003) {
+								win_rep = floor((opps_rep * 1.8 * 0.1) + 0.5);
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = floor((opps_rep * 1.9 * 0.1) + 0.5);
+								}
+								else {
+									win_rep = floor((opps_rep * 1.7 * 0.1) + 0.5);
+								}
+							}
+						}
+					}
+					else {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = 20000;
+						}
+						else {
+							if (track == 1003) {
+								win_rep = 18000;
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = 19000;
+								}
+								else {
+									win_rep = 17000;
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Circ = tps->Wins_Circ + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Circ = tps->REP_Circ + win_rep;
+					if (tps->REP_Circ > 99999999) tps->REP_Circ = 99999999;
+					break;
+				case 2:
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					break;
+				case 3:
+					// 3 players circuit 5 laps reporter 3 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Circ);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Circ = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Circ = (tps->OppsREP_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rep / 2) / (tps->Wins_Circ + tps->Loses_Circ);
+				tps->OppsRating_Circ = (tps->OppsRating_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rating) / (tps->Wins_Circ + tps->Loses_Circ);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 2) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 6:					// 3 players circuit 6 laps
+				switch (place) {
+				case 1:
+					// 3 players circuit 6 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = floor((opps_rep * 2.5 * 0.1) + 0.5);
+						}
+						else {
+							if (track == 1003) {
+								win_rep = floor((opps_rep * 2.3 * 0.1) + 0.5);
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = floor((opps_rep * 2.4 * 0.1) + 0.5);
+								}
+								else {
+									win_rep = floor((opps_rep * 2.2 * 0.1) + 0.5);
+								}
+							}
+						}
+					}
+					else {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = 25000;
+						}
+						else {
+							if (track == 1003) {
+								win_rep = 23000;
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = 24000;
+								}
+								else {
+									win_rep = 22000;
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Circ = tps->Wins_Circ + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Circ = tps->REP_Circ + win_rep;
+					if (tps->REP_Circ > 99999999) tps->REP_Circ = 99999999;
+					break;
+				case 2:
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					break;
+				case 3:
+					// 3 players circuit 6 laps reporter 3 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Circ);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Circ = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Circ = (tps->OppsREP_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rep / 2) / (tps->Wins_Circ + tps->Loses_Circ);
+				tps->OppsRating_Circ = (tps->OppsRating_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rating) / (tps->Wins_Circ + tps->Loses_Circ);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 2) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 7:					// 3 players circuit 7 laps
+				switch (place) {
+				case 1:
+					// 3 players circuit 7 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = floor((opps_rep * 3 * 0.1) + 0.5);
+						}
+						else {
+							if (track == 1003) {
+								win_rep = floor((opps_rep * 2.8 * 0.1) + 0.5);
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = floor((opps_rep * 2.9 * 0.1) + 0.5);
+								}
+								else {
+									win_rep = floor((opps_rep * 2.7 * 0.1) + 0.5);
+								}
+							}
+						}
+					}
+					else {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = 30000;
+						}
+						else {
+							if (track == 1003) {
+								win_rep = 28000;
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = 29000;
+								}
+								else {
+									win_rep = 27000;
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Circ = tps->Wins_Circ + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Circ = tps->REP_Circ + win_rep;
+					if (tps->REP_Circ > 99999999) tps->REP_Circ = 99999999;
+					break;
+				case 2:
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					break;
+				case 3:
+					// 3 players circuit 7 laps reporter 3 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Circ);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Circ = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Circ = (tps->OppsREP_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rep / 2) / (tps->Wins_Circ + tps->Loses_Circ);
+				tps->OppsRating_Circ = (tps->OppsRating_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rating) / (tps->Wins_Circ + tps->Loses_Circ);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 2) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 8:					// 3 players circuit 8 laps
+				switch (place) {
+				case 1:
+					// 3 players circuit 8 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = floor((opps_rep * 3.5 * 0.1) + 0.5);
+						}
+						else {
+							if (track == 1003) {
+								win_rep = floor((opps_rep * 3.3 * 0.1) + 0.5);
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = floor((opps_rep * 3.4 * 0.1) + 0.5);
+								}
+								else {
+									win_rep = floor((opps_rep * 3.2 * 0.1) + 0.5);
+								}
+							}
+						}
+					}
+					else {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = 35000;
+						}
+						else {
+							if (track == 1003) {
+								win_rep = 33000;
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = 34000;
+								}
+								else {
+									win_rep = 32000;
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Circ = tps->Wins_Circ + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Circ = tps->REP_Circ + win_rep;
+					if (tps->REP_Circ > 99999999) tps->REP_Circ = 99999999;
+					break;
+				case 2:
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					break;
+				case 3:
+					// 3 players circuit 8 laps reporter 3 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Circ);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Circ = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Circ = (tps->OppsREP_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rep / 2) / (tps->Wins_Circ + tps->Loses_Circ);
+				tps->OppsRating_Circ = (tps->OppsRating_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rating) / (tps->Wins_Circ + tps->Loses_Circ);
+
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 2) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 9:					// 3 players circuit 9 laps
+				switch (place) {
+				case 1:
+					// 3 players circuit 9 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = floor((opps_rep * 4 * 0.1) + 0.5);
+						}
+						else {
+							if (track == 1003) {
+								win_rep = floor((opps_rep * 3.8 * 0.1) + 0.5);
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = floor((opps_rep * 3.9 * 0.1) + 0.5);
+								}
+								else {
+									win_rep = floor((opps_rep * 3.7 * 0.1) + 0.5);
+								}
+							}
+						}
+					}
+					else {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = 40000;
+						}
+						else {
+							if (track == 1003) {
+								win_rep = 38000;
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = 39000;
+								}
+								else {
+									win_rep = 37000;
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Circ = tps->Wins_Circ + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Circ = tps->REP_Circ + win_rep;
+					if (tps->REP_Circ > 99999999) tps->REP_Circ = 99999999;
+					break;
+				case 2:
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					break;
+				case 3:
+					// 3 players circuit 9 laps reporter 3 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Circ);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Circ = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Circ = (tps->OppsREP_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rep / 2) / (tps->Wins_Circ + tps->Loses_Circ);
+				tps->OppsRating_Circ = (tps->OppsRating_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rating) / (tps->Wins_Circ + tps->Loses_Circ);
+
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 2) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 10:				// 3 players circuit 10 laps
+				switch (place) {
+				case 1:
+					// 3 players circuit 10 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = floor((opps_rep * 4.5 * 0.1) + 0.5);
+						}
+						else {
+							if (track == 1003) {
+								win_rep = floor((opps_rep * 4.3 * 0.1) + 0.5);
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = floor((opps_rep * 4.4 * 0.1) + 0.5);
+								}
+								else {
+									win_rep = floor((opps_rep * 4.2 * 0.1) + 0.5);
+								}
+							}
+						}
+					}
+					else {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = 45000;
+						}
+						else {
+							if (track == 1003) {
+								win_rep = 43000;
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = 44000;
+								}
+								else {
+									win_rep = 42000;
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Circ = tps->Wins_Circ + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Circ = tps->REP_Circ + win_rep;
+					if (tps->REP_Circ > 99999999) tps->REP_Circ = 99999999;
+					break;
+				case 2:
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					break;
+				case 3:
+					// 3 players circuit 10 laps reporter 3 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Circ);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Circ = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Circ = (tps->OppsREP_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rep / 2) / (tps->Wins_Circ + tps->Loses_Circ);
+				tps->OppsRating_Circ = (tps->OppsRating_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rating) / (tps->Wins_Circ + tps->Loses_Circ);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 2) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			}
+			break;
+		case 1:						// 3 players sprint 
+			if (opp1 != NULL) {
+				GetOppREP_Rating(opp1, type, tmp_rep, tmp_rating);
+				opps_rep = tmp_rep;
+				opps_rating = tmp_rating;
+			}
+			if (opp2 != NULL) {
+				GetOppREP_Rating(opp2, type, tmp_rep, tmp_rating);
+				opps_rep = opps_rep + tmp_rep;
+				opps_rating = (opps_rating + tmp_rating) / 2;
+			}
+			switch (place) {
+			case 1:
+				// 3 players sprint reporter 1st place
+				save_stat_signal = 1;
+				if (opps_rep < 100000) {
+					if (track == 1102) {
+						win_rep = floor((opps_rep * 0.1) + 0.5);
+					}
+					else {
+						if ((track == 1104) || (track == 1105) || (track == 1106)) {
+							win_rep = floor((opps_rep * 1.2 * 0.1) + 0.5);
+						}
+						else {
+							if (track == 1107) {
+								win_rep = floor((opps_rep * 1.4 * 0.1) + 0.5);
+							}
+							else {
+								win_rep = floor((opps_rep * 1.1 * 0.1) + 0.5);
+							}
+						}
+					}
+				}
+				else {
+					if (track == 1102) {
+						win_rep = 10000;
+					}
+					else {
+						if ((track == 1104) || (track == 1105) || (track == 1106)) {
+							win_rep = 12000;
+						}
+						else {
+							if (track == 1107) {
+								win_rep = 14000;
+							}
+							else {
+								win_rep = 11000;
+							}
+						}
+					}
+				}
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Wins_All = tps->Wins_All + 1;
+				tps->Wins_Sprint = tps->Wins_Sprint + 1;
+				tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+				if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+				tps->REP_Sprint = tps->REP_Sprint + win_rep;
+				if (tps->REP_Sprint > 99999999) tps->REP_Sprint = 99999999;
+				break;
+			case 2:
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Loses_All = tps->Loses_All + 1;
+				tps->Loses_Sprint = tps->Loses_Sprint + 1;
+				if (disc == -1) {
+					tps->Disc_All = tps->Disc_All + 1;
+					tps->Disc_Sprint = tps->Disc_Sprint + 1;
+				}
+				break;
+			case 3:
+				// 3 players sprint reporter 3 place
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				if (tps->REP_Sprint < 200000) {
+					lost_rep = floor((tps->REP_Sprint * 0.1) + 0.5);
+				}
+				else {
+					lost_rep = 20000;
+				}
+				tps->Loses_All = tps->Loses_All + 1;
+				tps->Loses_Sprint = tps->Loses_Sprint + 1;
+				if (disc == -1) {
+					tps->Disc_All = tps->Disc_All + 1;
+					tps->Disc_Sprint = tps->Disc_Sprint + 1;
+				}
+				tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+				if (tps->REP_All < 100) tps->REP_All = 100;
+				tps->REP_Sprint = tps->REP_Sprint - lost_rep;
+				if (tps->REP_Sprint < 100) tps->REP_Sprint = 100;
+				break;
+			}
+			std::sort(PS.begin(), PS.end(), sort_REP_Sprint);
+			tps = std::find(PS.begin(), PS.end(), reporter);
+			tps->Rating_Sprint = std::distance(PS.begin(), tps) + 1;
+			tps->OppsREP_Sprint = (tps->OppsREP_Sprint * (tps->Wins_Sprint + tps->Loses_Sprint - 1) + opps_rep / 2) / (tps->Wins_Sprint + tps->Loses_Sprint);
+			tps->OppsRating_Sprint = (tps->OppsRating_Sprint * (tps->Wins_Sprint + tps->Loses_Sprint - 1) + opps_rating) / (tps->Wins_Sprint + tps->Loses_Sprint);
+			std::sort(PS.begin(), PS.end(), sort_REP_All);
+			tps = std::find(PS.begin(), PS.end(), reporter);
+			tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+			tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 2) / (tps->Wins_All + tps->Loses_All);
+			tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+			if (save_stat_signal) Server.SaveStat();
+			break;
+		case 2:						// 3 players drag
+			if (opp1 != NULL) {
+				GetOppREP_Rating(opp1, type, tmp_rep, tmp_rating);
+				opps_rep = tmp_rep;
+				opps_rating = tmp_rating;
+			}
+			if (opp2 != NULL) {
+				GetOppREP_Rating(opp2, type, tmp_rep, tmp_rating);
+				opps_rep = opps_rep + tmp_rep;
+				opps_rating = (opps_rating + tmp_rating) / 2;
+			}
+			switch (place) {
+			case 1:
+				// 3 players drag reporter 1st place
+				save_stat_signal = 1;
+				if (opps_rep < 100000) {
+					win_rep = floor((opps_rep * 0.1) + 0.5);
+				}
+				else {
+					win_rep = 10000;
+				}
+				// find reporter in the vector
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Wins_All = tps->Wins_All + 1;
+				tps->Wins_Drag = tps->Wins_Drag + 1;
+				tps->REP_Drag = tps->REP_Drag + win_rep;
+				if (tps->REP_Drag > 99999999) tps->REP_Drag = 99999999;
+				tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+				if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+				break;
+			case 2:
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Loses_All = tps->Loses_All + 1;
+				tps->Loses_Drag = tps->Loses_Drag + 1;
+				if (disc == -1) {
+					tps->Disc_All = tps->Disc_All + 1;
+					tps->Disc_Drag = tps->Disc_Drag + 1;
+				}
+				break;
+			case 3:
+				// 3 players drag reporter 3 place
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				if (tps->REP_Drag < 200000) {
+					lost_rep = floor((tps->REP_Drag * 0.1) + 0.5);
+				}
+				else {
+					lost_rep = 20000;
+				}
+				tps->Loses_All = tps->Loses_All + 1;
+				tps->Loses_Drag = tps->Loses_Drag + 1;
+				if (disc == -1) {
+					tps->Disc_All = tps->Disc_All + 1;
+					tps->Disc_Drag = tps->Disc_Drag + 1;
+				}
+				tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+				if (tps->REP_All < 100) tps->REP_All = 100;
+				tps->REP_Drag = tps->REP_Drag - lost_rep;
+				if (tps->REP_Drag < 100) tps->REP_Drag = 100;
+				break;
+			}
+			std::sort(PS.begin(), PS.end(), sort_REP_Drag);
+			tps = std::find(PS.begin(), PS.end(), reporter);
+			tps->Rating_Drag = std::distance(PS.begin(), tps) + 1;
+			tps->OppsREP_Drag = (tps->OppsREP_Drag * (tps->Wins_Drag + tps->Loses_Drag - 1) + opps_rep / 2) / (tps->Wins_Drag + tps->Loses_Drag);
+			tps->OppsRating_Drag = (tps->OppsRating_Drag * (tps->Wins_Drag + tps->Loses_Drag - 1) + opps_rating) / (tps->Wins_Drag + tps->Loses_Drag);
+			std::sort(PS.begin(), PS.end(), sort_REP_All);
+			tps = std::find(PS.begin(), PS.end(), reporter);
+			tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+			tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 2) / (tps->Wins_All + tps->Loses_All);
+			tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+			if (save_stat_signal) Server.SaveStat();
+			break;
+		case 3:						// 3 players drift
+			if (opp1 != NULL) {
+				GetOppREP_Rating(opp1, type, tmp_rep, tmp_rating);
+				opps_rep = tmp_rep;
+				opps_rating = tmp_rating;
+			}
+			if (opp2 != NULL) {
+				GetOppREP_Rating(opp2, type, tmp_rep, tmp_rating);
+				opps_rep = opps_rep + tmp_rep;
+				opps_rating = (opps_rating + tmp_rating) / 2;
+			}
+			switch (laps) {
+			case 2:					// 3 players drift 2 laps
+				switch (place) {
+				case 1:
+					// 2 players drift 2 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if (track == 1301) {
+							win_rep = floor((opps_rep * 0.1) + 0.5);
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = floor((opps_rep * 1.1 * 0.1) + 0.5);
+							}
+							else {
+								if (track == 1304) {
+									win_rep = floor((opps_rep * 1.2 * 0.1) + 0.5);
+								}
+								else {
+									if (track == 1306) {
+										win_rep = floor((opps_rep * 1.4 * 0.1) + 0.5);
+									}
+									else {
+										win_rep = floor((opps_rep * 1.3 * 0.1) + 0.5);
+									}
+								}
+							}
+						}
+					}
+					else {
+						if (track == 1301) {
+							win_rep = 10000;
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = 11000;
+							}
+							else {
+								if (track == 1304) {
+									win_rep = 12000;
+								}
+								else {
+									if (track == 1306) {
+										win_rep = 14000;
+									}
+									else {
+										win_rep = 13000;
+									}
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Drift = tps->Wins_Drift + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Drift = tps->REP_Drift + win_rep;
+					if (tps->REP_Drift > 99999999) tps->REP_Drift = 99999999;
+					break;
+				case 2:
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					break;
+				case 3:
+					// 3 players drift 2 laps reporter 3 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Drift);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Drift = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Drift = (tps->OppsREP_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rep / 2) / (tps->Wins_Drift + tps->Loses_Drift);
+				tps->OppsRating_Drift = (tps->OppsRating_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rating) / (tps->Wins_Drift + tps->Loses_Drift);
+
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 2) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 3:					// 3 players drift 3 laps
+				switch (place) {
+				case 1:
+					// 3 players drift 3 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if (track == 1301) {
+							win_rep = floor((opps_rep * 1.1 * 0.1) + 0.5);
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = floor((opps_rep * 1.2 * 0.1) + 0.5);
+							}
+							else {
+								if (track == 1304) {
+									win_rep = floor((opps_rep * 1.3 * 0.1) + 0.5);
+								}
+								else {
+									if (track == 1306) {
+										win_rep = floor((opps_rep * 1.5 * 0.1) + 0.5);
+									}
+									else {
+										win_rep = floor((opps_rep * 1.4 * 0.1) + 0.5);
+									}
+								}
+							}
+						}
+					}
+					else {
+						if (track == 1301) {
+							win_rep = 11000;
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = 12000;
+							}
+							else {
+								if (track == 1304) {
+									win_rep = 13000;
+								}
+								else {
+									if (track == 1306) {
+										win_rep = 15000;
+									}
+									else {
+										win_rep = 14000;
+									}
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Drift = tps->Wins_Drift + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Drift = tps->REP_Drift + win_rep;
+					if (tps->REP_Drift > 99999999) tps->REP_Drift = 99999999;
+					break;
+				case 2:
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					break;
+				case 3:
+					// 3 players drift 3 laps reporter 3 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Drift);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Drift = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Drift = (tps->OppsREP_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rep / 2) / (tps->Wins_Drift + tps->Loses_Drift);
+				tps->OppsRating_Drift = (tps->OppsRating_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rating) / (tps->Wins_Drift + tps->Loses_Drift);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 2) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 4:					// 3 players drift 4 laps
+				switch (place) {
+				case 1:
+					// 3 players drift 4 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if (track == 1301) {
+							win_rep = floor((opps_rep * 1.2 * 0.1) + 0.5);
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = floor((opps_rep * 1.3 * 0.1) + 0.5);
+							}
+							else {
+								if (track == 1304) {
+									win_rep = floor((opps_rep * 1.4 * 0.1) + 0.5);
+								}
+								else {
+									if (track == 1306) {
+										win_rep = floor((opps_rep * 1.6 * 0.1) + 0.5);
+									}
+									else {
+										win_rep = floor((opps_rep * 1.5 * 0.1) + 0.5);
+									}
+								}
+							}
+						}
+					}
+					else {
+						if (track == 1301) {
+							win_rep = 12000;
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = 13000;
+							}
+							else {
+								if (track == 1304) {
+									win_rep = 14000;
+								}
+								else {
+									if (track == 1306) {
+										win_rep = 16000;
+									}
+									else {
+										win_rep = 15000;
+									}
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Drift = tps->Wins_Drift + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Drift = tps->REP_Drift + win_rep;
+					if (tps->REP_Drift > 99999999) tps->REP_Drift = 99999999;
+					break;
+				case 2:
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					break;
+				case 3:
+					// 3 players drift 4 laps reporter 3 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Drift);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Drift = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Drift = (tps->OppsREP_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rep / 2) / (tps->Wins_Drift + tps->Loses_Drift);
+				tps->OppsRating_Drift = (tps->OppsRating_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rating) / (tps->Wins_Drift + tps->Loses_Drift);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 2) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 5:					// 3 players drift 5 laps
+				switch (place) {
+				case 1:
+					// 3 players drift 5 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if (track == 1301) {
+							win_rep = floor((opps_rep * 1.7 * 0.1) + 0.5);
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = floor((opps_rep * 1.8 * 0.1) + 0.5);
+							}
+							else {
+								if (track == 1304) {
+									win_rep = floor((opps_rep * 1.9 * 0.1) + 0.5);
+								}
+								else {
+									if (track == 1306) {
+										win_rep = floor((opps_rep * 2.1 * 0.1) + 0.5);
+									}
+									else {
+										win_rep = floor((opps_rep * 2 * 0.1) + 0.5);
+									}
+								}
+							}
+						}
+					}
+					else {
+						if (track == 1301) {
+							win_rep = 17000;
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = 18000;
+							}
+							else {
+								if (track == 1304) {
+									win_rep = 19000;
+								}
+								else {
+									if (track == 1306) {
+										win_rep = 21000;
+									}
+									else {
+										win_rep = 20000;
+									}
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Drift = tps->Wins_Drift + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Drift = tps->REP_Drift + win_rep;
+					if (tps->REP_Drift > 99999999) tps->REP_Drift = 99999999;
+					break;
+				case 2:
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					break;
+				case 3:
+					// 3 players drift 5 laps reporter 3 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Drift);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Drift = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Drift = (tps->OppsREP_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rep / 2) / (tps->Wins_Drift + tps->Loses_Drift);
+				tps->OppsRating_Drift = (tps->OppsRating_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rating) / (tps->Wins_Drift + tps->Loses_Drift);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 2) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 6:					// 3 players drift 6 laps
+				switch (place) {
+				case 1:
+					// 3 players drift 6 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if (track == 1301) {
+							win_rep = floor((opps_rep * 2.2 * 0.1) + 0.5);
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = floor((opps_rep * 2.3 * 0.1) + 0.5);
+							}
+							else {
+								if (track == 1304) {
+									win_rep = floor((opps_rep * 2.4 * 0.1) + 0.5);
+								}
+								else {
+									if (track == 1306) {
+										win_rep = floor((opps_rep * 2.6 * 0.1) + 0.5);
+									}
+									else {
+										win_rep = floor((opps_rep * 2.5 * 0.1) + 0.5);
+									}
+								}
+							}
+						}
+					}
+					else {
+						if (track == 1301) {
+							win_rep = 22000;
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = 23000;
+							}
+							else {
+								if (track == 1304) {
+									win_rep = 24000;
+								}
+								else {
+									if (track == 1306) {
+										win_rep = 26000;
+									}
+									else {
+										win_rep = 25000;
+									}
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Drift = tps->Wins_Drift + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Drift = tps->REP_Drift + win_rep;
+					if (tps->REP_Drift > 99999999) tps->REP_Drift = 99999999;
+					break;
+				case 2:
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					break;
+				case 3:
+					// 3 players drift 6 laps reporter 3 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Drift);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Drift = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Drift = (tps->OppsREP_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rep / 2) / (tps->Wins_Drift + tps->Loses_Drift);
+				tps->OppsRating_Drift = (tps->OppsRating_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rating) / (tps->Wins_Drift + tps->Loses_Drift);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 2) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 7:					// 3 players drift 7 laps
+				switch (place) {
+				case 1:
+					// 3 players drift 7 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if (track == 1301) {
+							win_rep = floor((opps_rep * 2.7 * 0.1) + 0.5);
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = floor((opps_rep * 2.8 * 0.1) + 0.5);
+							}
+							else {
+								if (track == 1304) {
+									win_rep = floor((opps_rep * 2.9 * 0.1) + 0.5);
+								}
+								else {
+									if (track == 1306) {
+										win_rep = floor((opps_rep * 3.1 * 0.1) + 0.5);
+									}
+									else {
+										win_rep = floor((opps_rep * 3 * 0.1) + 0.5);
+									}
+								}
+							}
+						}
+					}
+					else {
+						if (track == 1301) {
+							win_rep = 11000;
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = 12000;
+							}
+							else {
+								if (track == 1304) {
+									win_rep = 13000;
+								}
+								else {
+									if (track == 1306) {
+										win_rep = 15000;
+									}
+									else {
+										win_rep = 14000;
+									}
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Drift = tps->Wins_Drift + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Drift = tps->REP_Drift + win_rep;
+					if (tps->REP_Drift > 99999999) tps->REP_Drift = 99999999;
+					break;
+				case 2:
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					break;
+				case 3:
+					// 3 players drift 7 laps reporter 3 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Drift);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Drift = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Drift = (tps->OppsREP_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rep / 2) / (tps->Wins_Drift + tps->Loses_Drift);
+				tps->OppsRating_Drift = (tps->OppsRating_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rating) / (tps->Wins_Drift + tps->Loses_Drift);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 2) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 8:					// 3 players drift 8 laps
+				switch (place) {
+				case 1:
+					// 3 players drift 8 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if (track == 1301) {
+							win_rep = floor((opps_rep * 3.2 * 0.1) + 0.5);
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = floor((opps_rep * 3.3 * 0.1) + 0.5);
+							}
+							else {
+								if (track == 1304) {
+									win_rep = floor((opps_rep * 3.4 * 0.1) + 0.5);
+								}
+								else {
+									if (track == 1306) {
+										win_rep = floor((opps_rep * 3.6 * 0.1) + 0.5);
+									}
+									else {
+										win_rep = floor((opps_rep * 3.5 * 0.1) + 0.5);
+									}
+								}
+							}
+						}
+					}
+					else {
+						if (track == 1301) {
+							win_rep = 32000;
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = 33000;
+							}
+							else {
+								if (track == 1304) {
+									win_rep = 34000;
+								}
+								else {
+									if (track == 1306) {
+										win_rep = 36000;
+									}
+									else {
+										win_rep = 35000;
+									}
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Drift = tps->Wins_Drift + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Drift = tps->REP_Drift + win_rep;
+					if (tps->REP_Drift > 99999999) tps->REP_Drift = 99999999;
+					break;
+				case 2:
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					break;
+				case 3:
+					// 3 players drift 8 laps reporter 3 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Drift);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Drift = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Drift = (tps->OppsREP_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rep / 2) / (tps->Wins_Drift + tps->Loses_Drift);
+				tps->OppsRating_Drift = (tps->OppsRating_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rating) / (tps->Wins_Drift + tps->Loses_Drift);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 2) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 9:					// 3 players drift 9 laps
+				switch (place) {
+				case 1:
+					// 3 players drift 9 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if (track == 1301) {
+							win_rep = floor((opps_rep * 3.7 * 0.1) + 0.5);
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = floor((opps_rep * 3.8 * 0.1) + 0.5);
+							}
+							else {
+								if (track == 1304) {
+									win_rep = floor((opps_rep * 3.9 * 0.1) + 0.5);
+								}
+								else {
+									if (track == 1306) {
+										win_rep = floor((opps_rep * 4.1 * 0.1) + 0.5);
+									}
+									else {
+										win_rep = floor((opps_rep * 4 * 0.1) + 0.5);
+									}
+								}
+							}
+						}
+					}
+					else {
+						if (track == 1301) {
+							win_rep = 37000;
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = 38000;
+							}
+							else {
+								if (track == 1304) {
+									win_rep = 39000;
+								}
+								else {
+									if (track == 1306) {
+										win_rep = 41000;
+									}
+									else {
+										win_rep = 40000;
+									}
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Drift = tps->Wins_Drift + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Drift = tps->REP_Drift + win_rep;
+					if (tps->REP_Drift > 99999999) tps->REP_Drift = 99999999;
+					break;
+				case 2:
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					break;
+				case 3:
+					// 3 players drift 9 laps reporter 3 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Drift);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Drift = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Drift = (tps->OppsREP_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rep / 2) / (tps->Wins_Drift + tps->Loses_Drift);
+				tps->OppsRating_Drift = (tps->OppsRating_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rating) / (tps->Wins_Drift + tps->Loses_Drift);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 2) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 10:				// 3 players drift 10 laps
+				switch (place) {
+				case 1:
+					// 3 players drift 10 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if (track == 1301) {
+							win_rep = floor((opps_rep * 4.2 * 0.1) + 0.5);
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = floor((opps_rep * 4.3 * 0.1) + 0.5);
+							}
+							else {
+								if (track == 1304) {
+									win_rep = floor((opps_rep * 4.4 * 0.1) + 0.5);
+								}
+								else {
+									if (track == 1306) {
+										win_rep = floor((opps_rep * 4.6 * 0.1) + 0.5);
+									}
+									else {
+										win_rep = floor((opps_rep * 4.5 * 0.1) + 0.5);
+									}
+								}
+							}
+						}
+					}
+					else {
+						if (track == 1301) {
+							win_rep = 42000;
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = 43000;
+							}
+							else {
+								if (track == 1304) {
+									win_rep = 44000;
+								}
+								else {
+									if (track == 1306) {
+										win_rep = 46000;
+									}
+									else {
+										win_rep = 45000;
+									}
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Drift = tps->Wins_Drift + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Drift = tps->REP_Drift + win_rep;
+					if (tps->REP_Drift > 99999999) tps->REP_Drift = 99999999;
+					break;
+				case 2:
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					break;
+				case 3:
+					// 3 players drift 10 laps reporter 3 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Drift);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Drift = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Drift = (tps->OppsREP_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rep / 2) / (tps->Wins_Drift + tps->Loses_Drift);
+				tps->OppsRating_Drift = (tps->OppsRating_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rating) / (tps->Wins_Drift + tps->Loses_Drift);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 2) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			}
+			break;
+		}
+		break;
+	case 4:
+		switch (type) {
+		case 0:					// 3 players circuit 
+			// get opps REP and Ratings
+			if (opp1 != NULL) {
+				GetOppREP_Rating(opp1, type, tmp_rep, tmp_rating);
+				opps_rep = tmp_rep;
+				opps_rating = tmp_rating;
+			}
+			if (opp2 != NULL) {
+				GetOppREP_Rating(opp2, type, tmp_rep, tmp_rating);
+				opps_rep = opps_rep + tmp_rep;
+				opps_rating = opps_rating + tmp_rating;
+			}
+			if (opp3 != NULL) {
+				GetOppREP_Rating(opp3, type, tmp_rep, tmp_rating);
+				opps_rep = opps_rep + tmp_rep;
+				opps_rating = (opps_rating + tmp_rating) / 3;
+			}
+			switch (laps) {
+			case 2:					// 4 players circuit 2 laps
+				switch (place) {
+				case 1:
+					// 4 players circuit 2 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = floor((opps_rep * 1.3 * 0.1) + 0.5);
+						}
+						else {
+							if (track == 1003) {
+								win_rep = floor((opps_rep * 1.1 * 0.1) + 0.5);
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = floor((opps_rep * 1.2 * 0.1) + 0.5);
+								}
+								else {
+									win_rep = floor((opps_rep * 0.1) + 0.5);
+								}
+							}
+						}
+					}
+					else {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = 13000;
+						}
+						else {
+							if (track == 1003) {
+								win_rep = 11000;
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = 12000;
+								}
+								else {
+									win_rep = 10000;
+								}
+							}
+						}
+					}
+					// find reporter in the vector
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					// update reporter statistics
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Circ = tps->Wins_Circ + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Circ = tps->REP_Circ + win_rep;
+					if (tps->REP_Circ > 99999999) tps->REP_Circ = 99999999;
+					break;
+				case 2:
+					// update bit of stat 
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					break;
+				case 3:
+					// 4 players circuit 2 laps reporter 3 place
+					// find reporter in the vector
+					tps = std::find(PS.begin(), PS.end(), reporter);
+
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.05) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					// update reporter statistics
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+					break;
+				case 4:
+					// 4 players circuit 2 laps reporter 4 place
+					// find reporter in the vector
+					tps = std::find(PS.begin(), PS.end(), reporter);
+
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					// update reporter statistics
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+					break;
+				}
+				// update reporter averages statistics
+				std::sort(PS.begin(), PS.end(), sort_REP_Circ);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Circ = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Circ = (tps->OppsREP_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rep / 3) / (tps->Wins_Circ + tps->Loses_Circ);
+				tps->OppsRating_Circ = (tps->OppsRating_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rating) / (tps->Wins_Circ + tps->Loses_Circ);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 2) + opps_rep / 3) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 2) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 3:					// 4 players circuit 3 laps
+				switch (place) {
+				case 1:
+					// 4 players circuit 3 laps reporter 1st place
+					// set save stat.dat
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = floor((opps_rep * 1.4 * 0.1) + 0.5);
+						}
+						else {
+							if (track == 1003) {
+								win_rep = floor((opps_rep * 1.2 * 0.1) + 0.5);
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = floor((opps_rep * 1.3 * 0.1) + 0.5);
+								}
+								else {
+									win_rep = floor((opps_rep * 1.1 * 0.1) + 0.5);
+								}
+							}
+						}
+					}
+					else {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = 14000;
+						}
+						else {
+							if (track == 1003) {
+								win_rep = 12000;
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = 13000;
+								}
+								else {
+									win_rep = 11000;
+								}
+							}
+						}
+					}
+					// find reporter in the vector
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					// update reporter statistics
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Circ = tps->Wins_Circ + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Circ = tps->REP_Circ + win_rep;
+					if (tps->REP_Circ > 99999999) tps->REP_Circ = 99999999;
+					break;
+				case 2:
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					break;
+				case 3:
+					// 4 players circuit 3 laps reporter 3 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.05) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					// update reporter statistics
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+					break;
+				case 4:
+					// 4 players circuit 3 laps reporter 4 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Circ);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Circ = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Circ = (tps->OppsREP_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rep / 3) / (tps->Wins_Circ + tps->Loses_Circ);
+				tps->OppsRating_Circ = (tps->OppsRating_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rating) / (tps->Wins_Circ + tps->Loses_Circ);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 3) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 4:				// 4 players circuit 4 laps
+				switch (place) {
+				case 1:
+					// 4 players circuit 4 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = floor((opps_rep * 1.5 * 0.1) + 0.5);
+						}
+						else {
+							if (track == 1003) {
+								win_rep = floor((opps_rep * 1.3 * 0.1) + 0.5);
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = floor((opps_rep * 1.4 * 0.1) + 0.5);
+								}
+								else {
+									win_rep = floor((opps_rep * 1.2 * 0.1) + 0.5);
+								}
+							}
+						}
+					}
+					else {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = 15000;
+						}
+						else {
+							if (track == 1003) {
+								win_rep = 13000;
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = 14000;
+								}
+								else {
+									win_rep = 12000;
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Circ = tps->Wins_Circ + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Circ = tps->REP_Circ + win_rep;
+					if (tps->REP_Circ > 99999999) tps->REP_Circ = 99999999;
+					break;
+				case 2:
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					break;
+				case 3:
+					// 4 players circuit 4 laps reporter 3 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.05) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					// update reporter statistics
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+					break;
+				case 4:
+					// 4 players circuit 4 laps reporter 4 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Circ);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Circ = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Circ = (tps->OppsREP_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rep / 3) / (tps->Wins_Circ + tps->Loses_Circ);
+				tps->OppsRating_Circ = (tps->OppsRating_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rating) / (tps->Wins_Circ + tps->Loses_Circ);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 3) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 5:					// 4 players circuit 5 laps
+				switch (place) {
+				case 1:
+					// 4 players circuit 5 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = floor((opps_rep * 2 * 0.1) + 0.5);
+						}
+						else {
+							if (track == 1003) {
+								win_rep = floor((opps_rep * 1.8 * 0.1) + 0.5);
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = floor((opps_rep * 1.9 * 0.1) + 0.5);
+								}
+								else {
+									win_rep = floor((opps_rep * 1.7 * 0.1) + 0.5);
+								}
+							}
+						}
+					}
+					else {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = 20000;
+						}
+						else {
+							if (track == 1003) {
+								win_rep = 18000;
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = 19000;
+								}
+								else {
+									win_rep = 17000;
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Circ = tps->Wins_Circ + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Circ = tps->REP_Circ + win_rep;
+					if (tps->REP_Circ > 99999999) tps->REP_Circ = 99999999;
+					break;
+				case 2:
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					break;
+				case 3:
+					// 4 players circuit 5 laps reporter 3 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.05) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					// update reporter statistics
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+					break;
+				case 4:
+					// 4 players circuit 5 laps reporter 4 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Circ);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Circ = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Circ = (tps->OppsREP_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rep / 3) / (tps->Wins_Circ + tps->Loses_Circ);
+				tps->OppsRating_Circ = (tps->OppsRating_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rating) / (tps->Wins_Circ + tps->Loses_Circ);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 3) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 6:					// 4 players circuit 6 laps
+				switch (place) {
+				case 1:
+					// 4 players circuit 6 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = floor((opps_rep * 2.5 * 0.1) + 0.5);
+						}
+						else {
+							if (track == 1003) {
+								win_rep = floor((opps_rep * 2.3 * 0.1) + 0.5);
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = floor((opps_rep * 2.4 * 0.1) + 0.5);
+								}
+								else {
+									win_rep = floor((opps_rep * 2.2 * 0.1) + 0.5);
+								}
+							}
+						}
+					}
+					else {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = 25000;
+						}
+						else {
+							if (track == 1003) {
+								win_rep = 23000;
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = 24000;
+								}
+								else {
+									win_rep = 22000;
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Circ = tps->Wins_Circ + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Circ = tps->REP_Circ + win_rep;
+					if (tps->REP_Circ > 99999999) tps->REP_Circ = 99999999;
+					break;
+				case 2:
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					break;
+				case 3:
+					// 4 players circuit 6 laps reporter 3 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.05) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					// update reporter statistics
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+					break;
+				case 4:
+					// 4 players circuit 6 laps reporter 3 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Circ);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Circ = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Circ = (tps->OppsREP_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rep / 3) / (tps->Wins_Circ + tps->Loses_Circ);
+				tps->OppsRating_Circ = (tps->OppsRating_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rating) / (tps->Wins_Circ + tps->Loses_Circ);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 3) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 7:					// 4 players circuit 7 laps
+				switch (place) {
+				case 1:
+					// 4 players circuit 7 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = floor((opps_rep * 3 * 0.1) + 0.5);
+						}
+						else {
+							if (track == 1003) {
+								win_rep = floor((opps_rep * 2.8 * 0.1) + 0.5);
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = floor((opps_rep * 2.9 * 0.1) + 0.5);
+								}
+								else {
+									win_rep = floor((opps_rep * 2.7 * 0.1) + 0.5);
+								}
+							}
+						}
+					}
+					else {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = 30000;
+						}
+						else {
+							if (track == 1003) {
+								win_rep = 28000;
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = 29000;
+								}
+								else {
+									win_rep = 27000;
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Circ = tps->Wins_Circ + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Circ = tps->REP_Circ + win_rep;
+					if (tps->REP_Circ > 99999999) tps->REP_Circ = 99999999;
+					break;
+				case 2:
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					break;
+				case 3:
+					// 4 players circuit 7 laps reporter 3 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.05) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					// update reporter statistics
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+					break;
+				case 4:
+					// 4 players circuit 7 laps reporter 4 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Circ);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Circ = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Circ = (tps->OppsREP_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rep / 3) / (tps->Wins_Circ + tps->Loses_Circ);
+				tps->OppsRating_Circ = (tps->OppsRating_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rating) / (tps->Wins_Circ + tps->Loses_Circ);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 3) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 8:					// 4 players circuit 8 laps
+				switch (place) {
+				case 1:
+					// 4 players circuit 8 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = floor((opps_rep * 3.5 * 0.1) + 0.5);
+						}
+						else {
+							if (track == 1003) {
+								win_rep = floor((opps_rep * 3.3 * 0.1) + 0.5);
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = floor((opps_rep * 3.4 * 0.1) + 0.5);
+								}
+								else {
+									win_rep = floor((opps_rep * 3.2 * 0.1) + 0.5);
+								}
+							}
+						}
+					}
+					else {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = 35000;
+						}
+						else {
+							if (track == 1003) {
+								win_rep = 33000;
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = 34000;
+								}
+								else {
+									win_rep = 32000;
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Circ = tps->Wins_Circ + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Circ = tps->REP_Circ + win_rep;
+					if (tps->REP_Circ > 99999999) tps->REP_Circ = 99999999;
+					break;
+				case 2:
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					break;
+				case 3:
+					// 4 players circuit 8 laps reporter 3 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.05) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					// update reporter statistics
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+					break;
+				case 4:
+					// 4 players circuit 8 laps reporter 4 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Circ);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Circ = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Circ = (tps->OppsREP_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rep / 3) / (tps->Wins_Circ + tps->Loses_Circ);
+				tps->OppsRating_Circ = (tps->OppsRating_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rating) / (tps->Wins_Circ + tps->Loses_Circ);
+
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 3) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 9:					// 4 players circuit 9 laps
+				switch (place) {
+				case 1:
+					// 4 players circuit 9 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = floor((opps_rep * 4 * 0.1) + 0.5);
+						}
+						else {
+							if (track == 1003) {
+								win_rep = floor((opps_rep * 3.8 * 0.1) + 0.5);
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = floor((opps_rep * 3.9 * 0.1) + 0.5);
+								}
+								else {
+									win_rep = floor((opps_rep * 3.7 * 0.1) + 0.5);
+								}
+							}
+						}
+					}
+					else {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = 40000;
+						}
+						else {
+							if (track == 1003) {
+								win_rep = 38000;
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = 39000;
+								}
+								else {
+									win_rep = 37000;
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Circ = tps->Wins_Circ + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Circ = tps->REP_Circ + win_rep;
+					if (tps->REP_Circ > 99999999) tps->REP_Circ = 99999999;
+					break;
+				case 2:
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					break;
+				case 3:
+					// 4 players circuit 9 laps reporter 3 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.05) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+					break;
+				case 4:
+					// 4 players circuit 9 laps reporter 4 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Circ);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Circ = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Circ = (tps->OppsREP_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rep / 3) / (tps->Wins_Circ + tps->Loses_Circ);
+				tps->OppsRating_Circ = (tps->OppsRating_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rating) / (tps->Wins_Circ + tps->Loses_Circ);
+
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 3) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 10:				// 4 players circuit 10 laps
+				switch (place) {
+				case 1:
+					// 4 players circuit 10 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = floor((opps_rep * 4.5 * 0.1) + 0.5);
+						}
+						else {
+							if (track == 1003) {
+								win_rep = floor((opps_rep * 4.3 * 0.1) + 0.5);
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = floor((opps_rep * 4.4 * 0.1) + 0.5);
+								}
+								else {
+									win_rep = floor((opps_rep * 4.2 * 0.1) + 0.5);
+								}
+							}
+						}
+					}
+					else {
+						if ((track == 1001) || (track == 1002)) {
+							win_rep = 45000;
+						}
+						else {
+							if (track == 1003) {
+								win_rep = 43000;
+							}
+							else {
+								if ((track == 1004) || (track == 1005)) {
+									win_rep = 44000;
+								}
+								else {
+									win_rep = 42000;
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Circ = tps->Wins_Circ + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Circ = tps->REP_Circ + win_rep;
+					if (tps->REP_Circ > 99999999) tps->REP_Circ = 99999999;
+					break;
+				case 2:
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					break;
+				case 3:
+					// 4 players circuit 10 laps reporter 3 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.05) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+					break;
+				case 4:
+					// 4 players circuit 10 laps reporter 4 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Circ < 200000) {
+						lost_rep = floor((tps->REP_Circ * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Circ = tps->Loses_Circ + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Circ = tps->Disc_Circ + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Circ = tps->REP_Circ - lost_rep;
+					if (tps->REP_Circ < 100) tps->REP_Circ = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Circ);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Circ = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Circ = (tps->OppsREP_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rep / 3) / (tps->Wins_Circ + tps->Loses_Circ);
+				tps->OppsRating_Circ = (tps->OppsRating_Circ * (tps->Wins_Circ + tps->Loses_Circ - 1) + opps_rating) / (tps->Wins_Circ + tps->Loses_Circ);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 3) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			}
+			break;
+		case 1:						// 4 players sprint 
+			if (opp1 != NULL) {
+				GetOppREP_Rating(opp1, type, tmp_rep, tmp_rating);
+				opps_rep = tmp_rep;
+				opps_rating = tmp_rating;
+			}
+			if (opp2 != NULL) {
+				GetOppREP_Rating(opp2, type, tmp_rep, tmp_rating);
+				opps_rep = opps_rep + tmp_rep;
+				opps_rating = opps_rating + tmp_rating;
+			}
+			if (opp3 != NULL) {
+				GetOppREP_Rating(opp3, type, tmp_rep, tmp_rating);
+				opps_rep = opps_rep + tmp_rep;
+				opps_rating = (opps_rating + tmp_rating) / 3;
+			}
+			switch (place) {
+			case 1:
+				// 4 players sprint reporter 1st place
+				save_stat_signal = 1;
+				if (opps_rep < 100000) {
+					if (track == 1102) {
+						win_rep = floor((opps_rep * 0.1) + 0.5);
+					}
+					else {
+						if ((track == 1104) || (track == 1105) || (track == 1106)) {
+							win_rep = floor((opps_rep * 1.2 * 0.1) + 0.5);
+						}
+						else {
+							if (track == 1107) {
+								win_rep = floor((opps_rep * 1.4 * 0.1) + 0.5);
+							}
+							else {
+								win_rep = floor((opps_rep * 1.1 * 0.1) + 0.5);
+							}
+						}
+					}
+
+					if ((win_rep % 10) > 5) win_rep++;
+				}
+				else {
+					if (track == 1102) {
+						win_rep = 10000;
+					}
+					else {
+						if ((track == 1104) || (track == 1105) || (track == 1106)) {
+							win_rep = 12000;
+						}
+						else {
+							if (track == 1107) {
+								win_rep = 14000;
+							}
+							else {
+								win_rep = 11000;
+							}
+						}
+					}
+				}
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Wins_All = tps->Wins_All + 1;
+				tps->Wins_Sprint = tps->Wins_Sprint + 1;
+				tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+				if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+				tps->REP_Sprint = tps->REP_Sprint + win_rep;
+				if (tps->REP_Sprint > 99999999) tps->REP_Sprint = 99999999;
+				break;
+			case 2:
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Loses_All = tps->Loses_All + 1;
+				tps->Loses_Sprint = tps->Loses_Sprint + 1;
+				if (disc == -1) {
+					tps->Disc_All = tps->Disc_All + 1;
+					tps->Disc_Sprint = tps->Disc_Sprint + 1;
+				}
+				break;
+			case 3:
+				// 4 players sprint reporter 3 place
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				if (tps->REP_Sprint < 200000) {
+					lost_rep = floor((tps->REP_Sprint * 0.05) + 0.5);
+				}
+				else {
+					lost_rep = 20000;
+				}
+				tps->Loses_All = tps->Loses_All + 1;
+				tps->Loses_Sprint = tps->Loses_Sprint + 1;
+				if (disc == -1) {
+					tps->Disc_All = tps->Disc_All + 1;
+					tps->Disc_Sprint = tps->Disc_Sprint + 1;
+				}
+				tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+				if (tps->REP_All < 100) tps->REP_All = 100;
+				tps->REP_Sprint = tps->REP_Sprint - lost_rep;
+				if (tps->REP_Sprint < 100) tps->REP_Sprint = 100;
+				break;
+			case 4:
+				// 4 players sprint reporter 4 place
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				if (tps->REP_Sprint < 200000) {
+					lost_rep = floor((tps->REP_Sprint * 0.1) + 0.5);
+				}
+				else {
+					lost_rep = 20000;
+				}
+				tps->Loses_All = tps->Loses_All + 1;
+				tps->Loses_Sprint = tps->Loses_Sprint + 1;
+				if (disc == -1) {
+					tps->Disc_All = tps->Disc_All + 1;
+					tps->Disc_Sprint = tps->Disc_Sprint + 1;
+				}
+				tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+				if (tps->REP_All < 100) tps->REP_All = 100;
+				tps->REP_Sprint = tps->REP_Sprint - lost_rep;
+				if (tps->REP_Sprint < 100) tps->REP_Sprint = 100;
+				break;
+			}
+			std::sort(PS.begin(), PS.end(), sort_REP_Sprint);
+			tps = std::find(PS.begin(), PS.end(), reporter);
+			tps->Rating_Sprint = std::distance(PS.begin(), tps) + 1;
+			tps->OppsREP_Sprint = (tps->OppsREP_Sprint * (tps->Wins_Sprint + tps->Loses_Sprint - 1) + opps_rep / 3) / (tps->Wins_Sprint + tps->Loses_Sprint);
+			tps->OppsRating_Sprint = (tps->OppsRating_Sprint * (tps->Wins_Sprint + tps->Loses_Sprint - 1) + opps_rating) / (tps->Wins_Sprint + tps->Loses_Sprint);
+			std::sort(PS.begin(), PS.end(), sort_REP_All);
+			tps = std::find(PS.begin(), PS.end(), reporter);
+			tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+			tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 3) / (tps->Wins_All + tps->Loses_All);
+			tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+			if (save_stat_signal) Server.SaveStat();
+			break;
+		case 2:						// 4 players drag
+			if (opp1 != NULL) {
+				GetOppREP_Rating(opp1, type, tmp_rep, tmp_rating);
+				opps_rep = tmp_rep;
+				opps_rating = tmp_rating;
+			}
+			if (opp2 != NULL) {
+				GetOppREP_Rating(opp2, type, tmp_rep, tmp_rating);
+				opps_rep = opps_rep + tmp_rep;
+				opps_rating = opps_rating + tmp_rating;
+			}
+			if (opp3 != NULL) {
+				GetOppREP_Rating(opp3, type, tmp_rep, tmp_rating);
+				opps_rep = opps_rep + tmp_rep;
+				opps_rating = (opps_rating + tmp_rating) / 3;
+			}
+			switch (place) {
+			case 1:
+				// 4 players drag reporter 1st place
+				save_stat_signal = 1;
+				if (opps_rep < 100000) {
+					win_rep = floor((opps_rep * 0.1) + 0.5);
+				}
+				else {
+					win_rep = 10000;
+				}
+				// find reporter in the vector
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Wins_All = tps->Wins_All + 1;
+				tps->Wins_Drag = tps->Wins_Drag + 1;
+				tps->REP_Drag = tps->REP_Drag + win_rep;
+				if (tps->REP_Drag > 99999999) tps->REP_Drag = 99999999;
+				tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+				if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+				break;
+			case 2:
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Loses_All = tps->Loses_All + 1;
+				tps->Loses_Drag = tps->Loses_Drag + 1;
+				if (disc == -1) {
+					tps->Disc_All = tps->Disc_All + 1;
+					tps->Disc_Drag = tps->Disc_Drag + 1;
+				}
+				break;
+			case 3:
+				// 4 players drag reporter 3 place
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				if (tps->REP_Drag < 200000) {
+					lost_rep = floor((tps->REP_Drag * 0.05) + 0.5);
+				}
+				else {
+					lost_rep = 20000;
+				}
+				tps->Loses_All = tps->Loses_All + 1;
+				tps->Loses_Drag = tps->Loses_Drag + 1;
+				if (disc == -1) {
+					tps->Disc_All = tps->Disc_All + 1;
+					tps->Disc_Drag = tps->Disc_Drag + 1;
+				}
+				tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+				if (tps->REP_All < 100) tps->REP_All = 100;
+				tps->REP_Drag = tps->REP_Drag - lost_rep;
+				if (tps->REP_Drag < 100) tps->REP_Drag = 100;
+				break;
+			case 4:
+				// 4 players drag reporter 4 place
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				if (tps->REP_Drag < 200000) {
+					lost_rep = floor((tps->REP_Drag * 0.1) + 0.5);
+				}
+				else {
+					lost_rep = 20000;
+				}
+				tps->Loses_All = tps->Loses_All + 1;
+				tps->Loses_Drag = tps->Loses_Drag + 1;
+				if (disc == -1) {
+					tps->Disc_All = tps->Disc_All + 1;
+					tps->Disc_Drag = tps->Disc_Drag + 1;
+				}
+				tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+				if (tps->REP_All < 100) tps->REP_All = 100;
+				tps->REP_Drag = tps->REP_Drag - lost_rep;
+				if (tps->REP_Drag < 100) tps->REP_Drag = 100;
+				break;
+			}
+			std::sort(PS.begin(), PS.end(), sort_REP_Drag);
+			tps = std::find(PS.begin(), PS.end(), reporter);
+			tps->Rating_Drag = std::distance(PS.begin(), tps) + 1;
+			tps->OppsREP_Drag = (tps->OppsREP_Drag * (tps->Wins_Drag + tps->Loses_Drag - 1) + opps_rep / 3) / (tps->Wins_Drag + tps->Loses_Drag);
+			tps->OppsRating_Drag = (tps->OppsRating_Drag * (tps->Wins_Drag + tps->Loses_Drag - 1) + opps_rating) / (tps->Wins_Drag + tps->Loses_Drag);
+			std::sort(PS.begin(), PS.end(), sort_REP_All);
+			tps = std::find(PS.begin(), PS.end(), reporter);
+			tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+			tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 3) / (tps->Wins_All + tps->Loses_All);
+			tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+			if (save_stat_signal) Server.SaveStat();
+			break;
+		case 3:						// 4 players drift
+			if (opp1 != NULL) {
+				GetOppREP_Rating(opp1, type, tmp_rep, tmp_rating);
+				opps_rep = tmp_rep;
+				opps_rating = tmp_rating;
+			}
+			if (opp2 != NULL) {
+				GetOppREP_Rating(opp2, type, tmp_rep, tmp_rating);
+				opps_rep = opps_rep + tmp_rep;
+				opps_rating = opps_rating + tmp_rating;
+			}
+			if (opp3 != NULL) {
+				GetOppREP_Rating(opp3, type, tmp_rep, tmp_rating);
+				opps_rep = opps_rep + tmp_rep;
+				opps_rating = (opps_rating + tmp_rating) / 3;
+			}
+			switch (laps) {
+			case 2:					// 4 players drift 2 laps
+				switch (place) {
+				case 1:
+					// 4 players drift 2 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if (track == 1301) {
+							win_rep = floor((opps_rep * 0.1) + 0.5);
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = floor((opps_rep * 1.1 * 0.1) + 0.5);
+							}
+							else {
+								if (track == 1304) {
+									win_rep = floor((opps_rep * 1.2 * 0.1) + 0.5);
+								}
+								else {
+									if (track == 1306) {
+										win_rep = floor((opps_rep * 1.4 * 0.1) + 0.5);
+									}
+									else {
+										win_rep = floor((opps_rep * 1.3 * 0.1) + 0.5);
+									}
+								}
+							}
+						}
+					}
+					else {
+						if (track == 1301) {
+							win_rep = 10000;
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = 11000;
+							}
+							else {
+								if (track == 1304) {
+									win_rep = 12000;
+								}
+								else {
+									if (track == 1306) {
+										win_rep = 14000;
+									}
+									else {
+										win_rep = 13000;
+									}
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Drift = tps->Wins_Drift + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Drift = tps->REP_Drift + win_rep;
+					if (tps->REP_Drift > 99999999) tps->REP_Drift = 99999999;
+					break;
+				case 2:
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					break;
+				case 3:
+					// 4 players drift 2 laps reporter 3 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.05) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+					break;
+				case 4:
+					// 4 players drift 2 laps reporter 4 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Drift);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Drift = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Drift = (tps->OppsREP_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rep / 3) / (tps->Wins_Drift + tps->Loses_Drift);
+				tps->OppsRating_Drift = (tps->OppsRating_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rating) / (tps->Wins_Drift + tps->Loses_Drift);
+
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 3) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 3:					// 4 players drift 3 laps
+				switch (place) {
+				case 1:
+					// 4 players drift 3 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if (track == 1301) {
+							win_rep = floor((opps_rep * 1.1 * 0.1) + 0.5);
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = floor((opps_rep * 1.2 * 0.1) + 0.5);
+							}
+							else {
+								if (track == 1304) {
+									win_rep = floor((opps_rep * 1.3 * 0.1) + 0.5);
+								}
+								else {
+									if (track == 1306) {
+										win_rep = floor((opps_rep * 1.5 * 0.1) + 0.5);
+									}
+									else {
+										win_rep = floor((opps_rep * 1.4 * 0.1) + 0.5);
+									}
+								}
+							}
+						}
+					}
+					else {
+						if (track == 1301) {
+							win_rep = 11000;
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = 12000;
+							}
+							else {
+								if (track == 1304) {
+									win_rep = 13000;
+								}
+								else {
+									if (track == 1306) {
+										win_rep = 15000;
+									}
+									else {
+										win_rep = 14000;
+									}
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Drift = tps->Wins_Drift + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Drift = tps->REP_Drift + win_rep;
+					if (tps->REP_Drift > 99999999) tps->REP_Drift = 99999999;
+					break;
+				case 2:
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					break;
+				case 3:
+					// 4 players drift 3 laps reporter 3 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.05) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+					break;
+				case 4:
+					// 4 players drift 3 laps reporter 4 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Drift);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Drift = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Drift = (tps->OppsREP_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rep / 3) / (tps->Wins_Drift + tps->Loses_Drift);
+				tps->OppsRating_Drift = (tps->OppsRating_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rating) / (tps->Wins_Drift + tps->Loses_Drift);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 3) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 4:					// 4 players drift 4 laps
+				switch (place) {
+				case 1:
+					// 4 players drift 4 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if (track == 1301) {
+							win_rep = floor((opps_rep * 1.2 * 0.1) + 0.5);
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = floor((opps_rep * 1.3 * 0.1) + 0.5);
+							}
+							else {
+								if (track == 1304) {
+									win_rep = floor((opps_rep * 1.4 * 0.1) + 0.5);
+								}
+								else {
+									if (track == 1306) {
+										win_rep = floor((opps_rep * 1.6 * 0.1) + 0.5);
+									}
+									else {
+										win_rep = floor((opps_rep * 1.5 * 0.1) + 0.5);
+									}
+								}
+							}
+						}
+					}
+					else {
+						if (track == 1301) {
+							win_rep = 12000;
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = 13000;
+							}
+							else {
+								if (track == 1304) {
+									win_rep = 14000;
+								}
+								else {
+									if (track == 1306) {
+										win_rep = 16000;
+									}
+									else {
+										win_rep = 15000;
+									}
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Drift = tps->Wins_Drift + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Drift = tps->REP_Drift + win_rep;
+					if (tps->REP_Drift > 99999999) tps->REP_Drift = 99999999;
+					break;
+				case 2:
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					break;
+				case 3:
+					// 4 players drift 4 laps reporter 3 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.05) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+					break;
+				case 4:
+					// 4 players drift 4 laps reporter 4 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Drift);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Drift = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Drift = (tps->OppsREP_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rep / 3) / (tps->Wins_Drift + tps->Loses_Drift);
+				tps->OppsRating_Drift = (tps->OppsRating_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rating) / (tps->Wins_Drift + tps->Loses_Drift);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 3) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 5:					// 4 players drift 5 laps
+				switch (place) {
+				case 1:
+					// 4 players drift 5 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if (track == 1301) {
+							win_rep = floor((opps_rep * 1.7 * 0.1) + 0.5);
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = floor((opps_rep * 1.8 * 0.1) + 0.5);
+							}
+							else {
+								if (track == 1304) {
+									win_rep = floor((opps_rep * 1.9 * 0.1) + 0.5);
+								}
+								else {
+									if (track == 1306) {
+										win_rep = floor((opps_rep * 2.1 * 0.1) + 0.5);
+									}
+									else {
+										win_rep = floor((opps_rep * 2 * 0.1) + 0.5);
+									}
+								}
+							}
+						}
+					}
+					else {
+						if (track == 1301) {
+							win_rep = 17000;
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = 18000;
+							}
+							else {
+								if (track == 1304) {
+									win_rep = 19000;
+								}
+								else {
+									if (track == 1306) {
+										win_rep = 21000;
+									}
+									else {
+										win_rep = 20000;
+									}
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Drift = tps->Wins_Drift + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Drift = tps->REP_Drift + win_rep;
+					if (tps->REP_Drift > 99999999) tps->REP_Drift = 99999999;
+					break;
+				case 2:
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					break;
+				case 3:
+					// 4 players drift 5 laps reporter 3 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.05) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+					break;
+				case 4:
+					// 4 players drift 5 laps reporter 4 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Drift);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Drift = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Drift = (tps->OppsREP_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rep / 3) / (tps->Wins_Drift + tps->Loses_Drift);
+				tps->OppsRating_Drift = (tps->OppsRating_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rating) / (tps->Wins_Drift + tps->Loses_Drift);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 3) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 6:					// 4 players drift 6 laps
+				switch (place) {
+				case 1:
+					// 4 players drift 6 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if (track == 1301) {
+							win_rep = floor((opps_rep * 2.2 * 0.1) + 0.5);
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = floor((opps_rep * 2.3 * 0.1) + 0.5);
+							}
+							else {
+								if (track == 1304) {
+									win_rep = floor((opps_rep * 2.4 * 0.1) + 0.5);
+								}
+								else {
+									if (track == 1306) {
+										win_rep = floor((opps_rep * 2.6 * 0.1) + 0.5);
+									}
+									else {
+										win_rep = floor((opps_rep * 2.5 * 0.1) + 0.5);
+									}
+								}
+							}
+						}
+					}
+					else {
+						if (track == 1301) {
+							win_rep = 22000;
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = 23000;
+							}
+							else {
+								if (track == 1304) {
+									win_rep = 24000;
+								}
+								else {
+									if (track == 1306) {
+										win_rep = 26000;
+									}
+									else {
+										win_rep = 25000;
+									}
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Drift = tps->Wins_Drift + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Drift = tps->REP_Drift + win_rep;
+					if (tps->REP_Drift > 99999999) tps->REP_Drift = 99999999;
+					break;
+				case 2:
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					break;
+				case 3:
+					// 4 players drift 6 laps reporter 3 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.05) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+					break;
+				case 4:
+					// 4 players drift 6 laps reporter 4 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Drift);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Drift = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Drift = (tps->OppsREP_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rep / 3) / (tps->Wins_Drift + tps->Loses_Drift);
+				tps->OppsRating_Drift = (tps->OppsRating_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rating) / (tps->Wins_Drift + tps->Loses_Drift);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 3) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 7:					// 4 players drift 7 laps
+				switch (place) {
+				case 1:
+					// 4 players drift 7 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if (track == 1301) {
+							win_rep = floor((opps_rep * 2.7 * 0.1) + 0.5);
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = floor((opps_rep * 2.8 * 0.1) + 0.5);
+							}
+							else {
+								if (track == 1304) {
+									win_rep = floor((opps_rep * 2.9 * 0.1) + 0.5);
+								}
+								else {
+									if (track == 1306) {
+										win_rep = floor((opps_rep * 3.1 * 0.1) + 0.5);
+									}
+									else {
+										win_rep = floor((opps_rep * 3 * 0.1) + 0.5);
+									}
+								}
+							}
+						}
+					}
+					else {
+						if (track == 1301) {
+							win_rep = 11000;
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = 12000;
+							}
+							else {
+								if (track == 1304) {
+									win_rep = 13000;
+								}
+								else {
+									if (track == 1306) {
+										win_rep = 15000;
+									}
+									else {
+										win_rep = 14000;
+									}
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Drift = tps->Wins_Drift + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Drift = tps->REP_Drift + win_rep;
+					if (tps->REP_Drift > 99999999) tps->REP_Drift = 99999999;
+					break;
+				case 2:
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					break;
+				case 3:
+					// 4 players drift 7 laps reporter 3 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.05) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+					break;
+				case 4:
+					// 4 players drift 7 laps reporter 4 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Drift);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Drift = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Drift = (tps->OppsREP_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rep / 3) / (tps->Wins_Drift + tps->Loses_Drift);
+				tps->OppsRating_Drift = (tps->OppsRating_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rating) / (tps->Wins_Drift + tps->Loses_Drift);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 3) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 8:					// 4 players drift 8 laps
+				switch (place) {
+				case 1:
+					// 4 players drift 8 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if (track == 1301) {
+							win_rep = floor((opps_rep * 3.2 * 0.1) + 0.5);
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = floor((opps_rep * 3.3 * 0.1) + 0.5);
+							}
+							else {
+								if (track == 1304) {
+									win_rep = floor((opps_rep * 3.4 * 0.1) + 0.5);
+								}
+								else {
+									if (track == 1306) {
+										win_rep = floor((opps_rep * 3.6 * 0.1) + 0.5);
+									}
+									else {
+										win_rep = floor((opps_rep * 3.5 * 0.1) + 0.5);
+									}
+								}
+							}
+						}
+					}
+					else {
+						if (track == 1301) {
+							win_rep = 32000;
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = 33000;
+							}
+							else {
+								if (track == 1304) {
+									win_rep = 34000;
+								}
+								else {
+									if (track == 1306) {
+										win_rep = 36000;
+									}
+									else {
+										win_rep = 35000;
+									}
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Drift = tps->Wins_Drift + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Drift = tps->REP_Drift + win_rep;
+					if (tps->REP_Drift > 99999999) tps->REP_Drift = 99999999;
+					break;
+				case 2:
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					break;
+				case 3:
+					// 4 players drift 8 laps reporter 3 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.05) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+					break;
+				case 4:
+					// 4 players drift 8 laps reporter 4 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Drift);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Drift = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Drift = (tps->OppsREP_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rep / 3) / (tps->Wins_Drift + tps->Loses_Drift);
+				tps->OppsRating_Drift = (tps->OppsRating_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rating) / (tps->Wins_Drift + tps->Loses_Drift);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 3) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 9:					// 4 players drift 9 laps
+				switch (place) {
+				case 1:
+					// 4 players drift 9 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if (track == 1301) {
+							win_rep = floor((opps_rep * 3.7 * 0.1) + 0.5);
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = floor((opps_rep * 3.8 * 0.1) + 0.5);
+							}
+							else {
+								if (track == 1304) {
+									win_rep = floor((opps_rep * 3.9 * 0.1) + 0.5);
+								}
+								else {
+									if (track == 1306) {
+										win_rep = floor((opps_rep * 4.1 * 0.1) + 0.5);
+									}
+									else {
+										win_rep = floor((opps_rep * 4 * 0.1) + 0.5);
+									}
+								}
+							}
+						}
+					}
+					else {
+						if (track == 1301) {
+							win_rep = 37000;
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = 38000;
+							}
+							else {
+								if (track == 1304) {
+									win_rep = 39000;
+								}
+								else {
+									if (track == 1306) {
+										win_rep = 41000;
+									}
+									else {
+										win_rep = 40000;
+									}
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Drift = tps->Wins_Drift + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Drift = tps->REP_Drift + win_rep;
+					if (tps->REP_Drift > 99999999) tps->REP_Drift = 99999999;
+					break;
+				case 2:
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					break;
+				case 3:
+					// 4 players drift 9 laps reporter 3 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.05) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+					break;
+				case 4:
+					// 4 players drift 9 laps reporter 4 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Drift);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Drift = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Drift = (tps->OppsREP_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rep / 3) / (tps->Wins_Drift + tps->Loses_Drift);
+				tps->OppsRating_Drift = (tps->OppsRating_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rating) / (tps->Wins_Drift + tps->Loses_Drift);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 3) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			case 10:				// 4 players drift 10 laps
+				switch (place) {
+				case 1:
+					// 4 players drift 10 laps reporter 1st place
+					save_stat_signal = 1;
+					if (opps_rep < 100000) {
+						if (track == 1301) {
+							win_rep = floor((opps_rep * 4.2 * 0.1) + 0.5);
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = floor((opps_rep * 4.3 * 0.1) + 0.5);
+							}
+							else {
+								if (track == 1304) {
+									win_rep = floor((opps_rep * 4.4 * 0.1) + 0.5);
+								}
+								else {
+									if (track == 1306) {
+										win_rep = floor((opps_rep * 4.6 * 0.1) + 0.5);
+									}
+									else {
+										win_rep = floor((opps_rep * 4.5 * 0.1) + 0.5);
+									}
+								}
+							}
+						}
+					}
+					else {
+						if (track == 1301) {
+							win_rep = 42000;
+						}
+						else {
+							if ((track == 1302) || (track == 1303)) {
+								win_rep = 43000;
+							}
+							else {
+								if (track == 1304) {
+									win_rep = 44000;
+								}
+								else {
+									if (track == 1306) {
+										win_rep = 46000;
+									}
+									else {
+										win_rep = 45000;
+									}
+								}
+							}
+						}
+					}
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Wins_All = tps->Wins_All + 1;
+					tps->Wins_Drift = tps->Wins_Drift + 1;
+					tps->REP_All = tps->REP_All + (int)(win_rep / 4);
+					if (tps->REP_All > 99999999) tps->REP_All = 99999999;
+					tps->REP_Drift = tps->REP_Drift + win_rep;
+					if (tps->REP_Drift > 99999999) tps->REP_Drift = 99999999;
+					break;
+				case 2:
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					break;
+				case 3:
+					// 4 players drift 10 laps reporter 3 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.05) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+					break;
+				case 4:
+					// 4 players drift 10 laps reporter 4 place
+					tps = std::find(PS.begin(), PS.end(), reporter);
+					if (tps->REP_Drift < 200000) {
+						lost_rep = floor((tps->REP_Drift * 0.1) + 0.5);
+					}
+					else {
+						lost_rep = 20000;
+					}
+					tps->Loses_All = tps->Loses_All + 1;
+					tps->Loses_Drift = tps->Loses_Drift + 1;
+					if (disc == -1) {
+						tps->Disc_All = tps->Disc_All + 1;
+						tps->Disc_Drift = tps->Disc_Drift + 1;
+					}
+					tps->REP_All = tps->REP_All - (int)(lost_rep / 4);
+					if (tps->REP_All < 100) tps->REP_All = 100;
+					tps->REP_Drift = tps->REP_Drift - lost_rep;
+					if (tps->REP_Drift < 100) tps->REP_Drift = 100;
+					break;
+				}
+				std::sort(PS.begin(), PS.end(), sort_REP_Drift);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_Drift = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_Drift = (tps->OppsREP_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rep / 3) / (tps->Wins_Drift + tps->Loses_Drift);
+				tps->OppsRating_Drift = (tps->OppsRating_Drift * (tps->Wins_Drift + tps->Loses_Drift - 1) + opps_rating) / (tps->Wins_Drift + tps->Loses_Drift);
+				std::sort(PS.begin(), PS.end(), sort_REP_All);
+				tps = std::find(PS.begin(), PS.end(), reporter);
+				tps->Rating_All = std::distance(PS.begin(), tps) + 1;
+				tps->OppsREP_All = (tps->OppsREP_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rep / 3) / (tps->Wins_All + tps->Loses_All);
+				tps->OppsRating_All = (tps->OppsRating_All * (tps->Wins_All + tps->Loses_All - 1) + opps_rating) / (tps->Wins_All + tps->Loses_All);
+				if (save_stat_signal) Server.SaveStat();
+				break;
+			}
+			break;
+		}
+		break;
 	}
 };
