@@ -3,10 +3,10 @@
 #include "server.h"
 
 class MessageClass {
-	public:
-		char * Message;
-		unsigned int Size;
-	MessageClass * Next;
+public:
+	char* Message;
+	unsigned int Size;
+	MessageClass* Next;
 };
 
 class MessagesClass {
@@ -58,4 +58,5 @@ struct ConAccParam {
 	ConnectionsClass * Connections;
 	SOCKET sock;
 };
+
 MessageClass *MakeMessage( char * buffer, char * command, char * params [], int paramcount );

@@ -304,3 +304,6 @@ int recvn( SOCKET sock, char *buf, int required );
 int atoi2( char *str );
 char * GetPlayerStat(const char *Name);
 void GetOppREP_Rating(const char *name, const char race_type, int& rep, int& rating);
+bool sort_Time(StarsLap a, StarsLap b);
+bool sort_Points(StarsDrift a, StarsDrift b);
+void UpdateBestTimes(const int track, const int dir, const char* name0, const int car, const int best_lap, const int best_drift);
