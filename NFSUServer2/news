@@ -1,0 +1,61 @@
+NFS Underground unofficial server v.2.5.
+Based on code written by 3PriedeZ.
+
+---- 2013-10-17 ----
+* Three new rooms. Entry into these rooms is limited. 
+  Appropriate level of performance only allowed. 
+  Otherwise "Room is full" alert message. Try 
+  another room instead.
+---
+iTPEMOP
+
+---- 2013-10-17 ----
+* Ban TJ's cheaters option available. If you don't get
+  into a room - the ban is on. You should order your TJ
+  parts. Only three parts in the correct order allowed.
+---
+iTPEMOP
+
+---- 2013-09-19 ----
+* Unranked rooms result posts into "WEEK'S TOP PERFORMERS".
+---
+iTPEMOP
+
+---- 2013-09-01 ----
+* Fixed empty account name registration bug.
++ The site about this server has been launched. 
+  Vizit www.nfsu-2013.ru.
+---
+iTPEMOP
+
+---- 2013-06-21 ----
+* Fixed bug with unranked rooms. Now the race started
+  in unranked room don't change REP and the statistics.
+  (include WEEK'S TOP PERFORMERS).
+---
+iTPEMOP
+
+---- 2013-05-23 ----
+* Fixed private message. Author can see own message.
+---
+iTPEMOP
+
+---- 2013-03-31 ----
++ Added "WEEK'S TOP PERFORMERS" on drift.
+* Fixed Avg Opp REP calculating error. 
+---
+iTPEMOP
+
+---- 2013-03-23 ----
++ Added delete username.
+* Fixed bug on private message (all the players in the room
+  have seen private message).
++ Added REP updating.
++ Added "Head to Head -> View Player Details".
++ Added RANKING:
+    + Added "TOP 100 RANKED RACERS".
+    + Added "WEEK'S TOP PERFORMERS" (all but drift).
+- Didn't fix "Head to Head -> Send Challenge" bug.
+  Create a 4 player game instead.
+---
+iTPEMOP
