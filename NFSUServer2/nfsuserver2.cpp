@@ -129,7 +129,7 @@ bool sort_Points (StarsDrift a, StarsDrift b){
 #define DEFAULT_NEWS "-=-=-=-\nDefault news\nPlz tell server admin to make news file ;)\n-=-=-=-=-"
 
 ServerClass Server; //core ;)
-SessionsClass Sesss; // started races players info
+extern SessionsClass Sessions;
 
 char ascii[256] =
 {
@@ -5841,7 +5841,6 @@ void CalcStat(const char *reporter, const char *opp1, const char *opp2, const ch
 };
 
 
-
 void UpdateBestTimes(const int track, const int dir, const char *name0, const int car, const int best_lap, const int best_drift){
 	
 	std::vector<StarsLap>::iterator it;
@@ -7558,24 +7557,24 @@ threadfunc ListenerWorker(void *Dummy){
 										l++;
 									}
                                     /*
-									 тут из Sesss находим игрока и определяем комнату
+									 тут из Sessions находим игрока и определяем комнату
 									 в которой он проводил последнюю гонку
 									 если комната рейтинговая, то пересчитываем статистику
                                     //*/
-                                    SessionClass *sess=Sesss.First;
+                                    SessionClass *session=Sessions.First;
                                     
 									char RoomType='A';
 
-									while (sess != NULL){
- 									  if (stricmp(rept, sess->Persona)==0){
-										  sprintf(log, "Race finished REPT=%s IP=%s ROOM=%s PLACE=%d\n", rept, sess->IP, sess->FromRoom, Place);
+									while (session != NULL){
+ 									  if (stricmp(rept, session->Persona)==0){
+										  sprintf(log, "Race finished REPT=%s IP=%s ROOM=%s PLACE=%d\n", rept, session->IP, session->FromRoom, Place);
 										  Log(log);
-										  RoomType = *(sess->FromRoom);
-										  Sesss.RemoveSession(sess);
-										  free(sess);
+										  RoomType = *(session->FromRoom);
+										  Sessions.RemoveSession(session);
+										  free(session);
 										  break;
 									  }
-									  sess = sess->Next;
+									  session = session->Next;
 									}
 									/* 
 									   Первая буква имени комнаты для рейтинговых A, B, C, D 
@@ -8872,7 +8871,7 @@ threadfunc StatThread(void *Dummy){
 			}else{
 				ban_tj_cheat = 0;
 			}
-			players_in_race = Sesss.Count;
+			players_in_race = Sessions.Count;
 			// 2014-06-01
 			// add ban room creation status (0 - disabled / 1 - enabled)
 			if (BanRoom) {
@@ -8935,14 +8934,14 @@ threadfunc Maintenance(void *Dummy){
 
 		// 2013-11-04 fix sessions
 		// remove all sessions that lives more then 20 min
-		session = Sesss.First;
+		session = Sessions.First;
 		while (session != NULL){
 			session->Idle++;
 			if(session->Idle > 60*15){
 				sprintf(tempBuff, "Clear race info due to 15 min timeout. Username=%s, ROOM=%s\n", session->Persona, session->FromRoom); 
 				Log(tempBuff);
 				ts = session->Next;
-				Sesss.RemoveSession(session);
+				Sessions.RemoveSession(session);
 				free(session);
 				session = ts;
 			}else{

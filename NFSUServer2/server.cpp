@@ -40,7 +40,7 @@ extern std::vector<StarsDrift> S1306;
 extern std::vector<StarsDrift> S1307;
 extern std::vector<StarsDrift> S1308;
 
-extern SessionsClass Sesss;
+SessionsClass Sessions; // started races players info
 
 UserClass::UserClass() {
 	memset (Username, 0, sizeof (Username));
@@ -662,7 +662,7 @@ void GameClass::StartGame( char *buffer ) {
 		ru = ru->Next;
 	}
 	ru = Users.First;
-	SessionClass *sess;
+	SessionClass *session;
 
 	while (ru != NULL) {
 		sprintf (arr2[11 + l * 3], "SEED=%u", k);
@@ -675,12 +675,12 @@ void GameClass::StartGame( char *buffer ) {
 			  нужно сохранить инфу об имени игрока и типе комнаты, чтоб определить
 			  в дальнейшем рейтинговый заезд был или нет.
 			//*/
-			sess=(SessionClass*)calloc(1, sizeof(SessionClass));
-			strcpy(sess->Persona, ru->User->Personas[ru->User->SelectedPerson]);
-			strcpy(sess->FromRoom, Users.First->User->CurrentRoom->Name);
-			strcpy(sess->IP, ru->User->IP);
-			sess->Idle = 0;
-			Sesss.AddSession(sess);
+			session=(SessionClass*)calloc(1, sizeof(SessionClass));
+			strcpy(session->Persona, ru->User->Personas[ru->User->SelectedPerson]);
+			strcpy(session->FromRoom, Users.First->User->CurrentRoom->Name);
+			strcpy(session->IP, ru->User->IP);
+			session->Idle = 0;
+			Sessions.AddSession(session);
 		}
 		ru = ru->Next;
 	}
