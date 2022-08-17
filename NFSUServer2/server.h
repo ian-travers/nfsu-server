@@ -278,6 +278,12 @@ public:
 class ServerClass {
 	public:
 		char Name[100];
+		char ServerIP[100];
+		char ServerExternalIP[100];
+		char WelcomeMessage[100];
+		char WelcomeMessageType[1];
+		char WelcomeMessageAuthor[15];
+		
 		time_t Startup;
 		UsersClass Users;
 		RoomsClass Rooms;

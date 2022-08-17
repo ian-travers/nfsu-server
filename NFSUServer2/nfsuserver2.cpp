@@ -7,6 +7,10 @@
 
 #include "win_nix.h"
 #include "objects.h"
+#include <fstream>
+#include <sstream>
+#include <string>
+
 #ifndef _WIN32
 
 int stricmp( const char *b, const char *a ){
@@ -97,7 +101,7 @@ extern std::vector<StarsDrift> S1307;
 extern std::vector<StarsDrift> S1308;
 
 #define NFSU_LAN_VERSION "2.5"
-#define DEFAULT_NEWS "-=-=-=-\nDefault news\nPlz tell server admin to make news file ;)\n-=-=-=-=-"
+#define DEFAULT_NEWS "-=-=-=-\nDefault news\nPlz tell server admin to make news.txt file ;)\n-=-=-=-=-"
 
 extern ServerClass Server; //core ;)
 extern SessionsClass Sessions;
@@ -241,27 +245,27 @@ void LogTraffic( char *log, int len){
     }
 };
 
-void LoadNews(){
-    FILE * fil;
-    fil = fopen("news", "r");
+void LoadNews() {
+	FILE* fil;
+	fil = fopen("news.txt", "r");
 
-    if (fil == NULL){
-        news = _strdup(DEFAULT_NEWS);
-        return;
-    }
+	if (fil == NULL) {
+		news = _strdup(DEFAULT_NEWS);
+		return;
+	}
 
-    fseek(fil, 0, SEEK_END);
-    int siz = ftell(fil);
-    fseek(fil, 0, SEEK_SET);
+	fseek(fil, 0, SEEK_END);
+	int siz = ftell(fil);
+	fseek(fil, 0, SEEK_SET);
 
-    if(siz>10238) siz=10238;
+	if (siz > 10238) siz = 10238;
 
-    if (news != NULL)
-        free(news);
+	if (news != NULL)
+		free(news);
 
-    news=(char*)calloc(siz+1, sizeof(char));
-    fread(news, siz, 1, fil);
-    fclose(fil);
+	news = (char*)calloc(siz + 1, sizeof(char));
+	fread(news, siz, 1, fil);
+	fclose(fil);
 };
 
 threadfunc IOThread(void * Dummy){
@@ -479,7 +483,7 @@ threadfunc RedirectorWorker(void *Dummy){
 					sprintf(log, "Adding outgoing message : server_info_to_nfsu : %s\n", inet_ntoa(temp->remote_ip.sin_addr));
 					Log(log);
 				}
-				sprintf(arr2[0], "ADDR=%s", inet_ntoa(temp->local_ip.sin_addr));
+				sprintf(arr2[0], "ADDR=%s", Server.ServerExternalIP[0] != '\0' ? Server.ServerExternalIP : inet_ntoa(temp->local_ip.sin_addr));
 				sprintf(arr2[1], "PORT=10901");
 				sprintf(arr2[2], "SESS=1072010288");
 				sprintf(arr2[3], "MASK=0295f3f70ecb1757cd7001b9a7a5eac8");
@@ -500,9 +504,11 @@ threadfunc RedirectorWorker(void *Dummy){
 };
 
 void Subscribe(){
-	struct hostent *hostInfo = gethostbyname("3priedez.net");
+	char log[1024];
+	char const* trackeraddr = "nfsug.harpywar.com";
+	struct hostent* hostInfo = gethostbyname(trackeraddr);
 	SOCKADDR_IN remote_sockaddr_in;
-	unsigned long remote_sockaddr_length = sizeof(SOCKADDR_IN);	
+	unsigned long remote_sockaddr_length = sizeof(SOCKADDR_IN);
 	char buf[1024];
 
 	remote_sockaddr_in.sin_family = AF_INET;
@@ -515,14 +521,17 @@ void Subscribe(){
 		memcpy(&remote_sockaddr_in.sin_addr.s_addr, hostInfo->h_addr_list[0], hostInfo->h_length);
 #endif
 	}else{
-		remote_sockaddr_in.sin_addr.s_addr = inet_addr("195.2.101.48");
-		if (remote_sockaddr_in.sin_addr.s_addr == INADDR_NONE) return;
+		if (remote_sockaddr_in.sin_addr.s_addr == INADDR_NONE) {
+			sprintf(log, "[warn] Could not connect to server list tracker %s.\n", trackeraddr);
+			Log(log);
+			return;
+		}
 	}
 
 	SOCKET sock=socket(AF_INET, SOCK_STREAM, 0);
 	if(sock==INVALID_SOCKET) return;
 	if(connect(sock, (const sockaddr*)&remote_sockaddr_in, remote_sockaddr_length)==0){
-		sprintf(buf, "GET /nfsug/submit.py HTTP/1.1\x0d\x0aHost: 3priedez.net\x0d\x0a\x0d\x0a");
+		sprintf(buf, "GET /tracker/submit.php HTTP/1.1\x0d\x0aHost: %s\x0d\x0a\x0d\x0a", trackeraddr);
 		send(sock, buf, strlen(buf), 0);
 		recv(sock, buf, 1024, 0);
 		closesocket(sock);
@@ -532,7 +541,7 @@ void Subscribe(){
 threadfunc WebReport(void *dummy){
 	while(running){
 		Subscribe();
-		Sleep(1000*60*5);
+		Sleep(1000*60);
 	}
 };
 
@@ -876,35 +885,36 @@ threadfunc ListenerWorker(void *Dummy){
 										arr[0]=(char*)&arr2[0];
 										BroadCastCommand(&Server.Users, "+pop", arr, 1, buffer);
 
-
-
 										// сообщение при входе в комнату
-										UserClass *us;
-										us=Server.Users.UserFromUsername(user->Personas[user->SelectedPerson]);
-										if (us!=NULL){
-											if (us->Connection!=NULL){
-												if (!us->GetMsg) {
-													// attempt 1
-													// need pause for queue a message
-													Sleep(25);
-													us->GetMsg = true;
-													//sprintf(arr2[0], "F=P");
-													//sprintf(arr2[1], "T=www.nfsu-2013.ru");
-													//sprintf(arr2[2], "N=newbie");
-													//us->Connection->OutgoingMessages.AddMessage(MakeMessage(buffer, "+msg", arr, 3));
-													
-													sprintf(arr2[0], "F=A"); // username + (admin)
-													//sprintf(arr2[0], "F=M"); // username + (mod)
-													//sprintf(arr2[0], "F=H"); // username + (host)
-													sprintf(arr2[1], "T=www.nfsu-cup.com");
-													sprintf(arr2[2], "N=newbie");
-													us->Connection->OutgoingMessages.AddMessage(MakeMessage(buffer, "+msg", arr, 3));
+										if (Server.WelcomeMessage[0] != '\0') {
+											UserClass* us;
+											us = Server.Users.UserFromUsername(user->Personas[user->SelectedPerson]);
+											if (us != NULL) {
+												if (us->Connection != NULL) {
+													if (!us->GetMsg) {
+														// attempt 1
+														// need pause for queue a message
+														Sleep(25);
+														us->GetMsg = true;
+
+														if (Server.WelcomeMessageType[0] != '\0'){
+															sprintf(arr2[0], "F=%s", Server.WelcomeMessageType);
+														}
+														else {
+															sprintf(arr2[0], "F=b");
+														}
+														
+														sprintf(arr2[1], "T=%s", Server.WelcomeMessage);
+
+														if (Server.WelcomeMessageAuthor[0] != '\0') {
+															sprintf(arr2[2], "N=%s", Server.WelcomeMessageAuthor);
+														}
+
+														us->Connection->OutgoingMessages.AddMessage(MakeMessage(buffer, "+msg", arr, 3));
+													}
 												}
 											}
 										}
-
-
-
 									}else{				
 										sprintf(arr2[0], "IDENT=0");
 										sprintf(arr2[1], "NAME=");
@@ -2598,108 +2608,167 @@ VOID WINAPI ServiceCtrlHandler(DWORD dwControl)
 } 
 #endif
 
+void trim(char* s) {
+	// clear spaces from the start
+	int i = 0, j;
+	while ((s[i] == ' ') || (s[i] == '\t'))
+	{
+		i++;
+	}
+	if (i > 0)
+	{
+		for (j = 0; j < strlen(s); j++)
+		{
+			s[j] = s[j + i];
+		}
+		s[j] = '\0';
+	}
+	// clear spaces from the end
+	i = strlen(s) - 1;
+	while ((s[i] == ' ') || (s[i] == '\t'))
+	{
+		i--;
+	}
+	if (i < (strlen(s) - 1))
+	{
+		s[i + 1] = '\0';
+	}
+}
+
+void readOptionStr(char const* key, char val[]) {
+	int start_val = 0;
+	std::string::size_type i = 0;
+	size_t max_count;
+	char log[1024];
+
+	char const* filename = "nfsu.conf";
+
+	std::ifstream infile(filename);
+	if (!infile.good()) {
+		sprintf(log, "[warn] Could not open %s - loading default %s.\n", filename, key);
+		Log(log);
+		return;
+	}
+
+	std::string line;
+	while (std::getline(infile, line))
+	{
+		if (line[0] == '#' || line[0] == '\t' || line[0] == ' ' || line[0] == '\0')
+			continue;
+
+		// case insensitive comparison for key
+		while (key[i] != '\0' && line[i] != '\0') {
+			if (toupper(key[i]) != toupper(line[i]))
+				goto next;
+			i++;
+		}
+		// parse value after "=" and put into "val"
+		max_count = line.size() > 100 // max field size for the options in server.h
+			? 100 + strlen(key)
+			: line.size();
+		for (i = 0; i < max_count; ++i) {
+			if (start_val)
+				val[i - start_val] = line[i];
+
+			// find first occurence of '='
+			if (!start_val && line[i] == '=') {
+				start_val = i + 1;
+
+			}
+		}
+		val[i - start_val] = '\0';
+		trim(val);
+		// stop read when first occurence found
+		break;
+	next:;
+	}
+	infile.close();
+}
+
+bool readOptionBool(char const* key) {
+	char val[100];
+	readOptionStr(key, val);
+	return val[0] == '1';
+}
+
+const char* roomIds = "ABCDEFGH";
+void addRooms(char* rooms, int roomId) {
+	char r[100];
+	r[0] = roomIds[roomId];
+	r[1] = '.';
+
+	std::string token, str(rooms);
+	std::string delimiter = ",";
+
+	while (token != str) {
+		token = str.substr(0, str.find_first_of(delimiter));
+		str = str.substr(str.find_first_of(delimiter) + 1);
+
+		RoomClass* room = (RoomClass*)calloc(1, sizeof(RoomClass));
+		room->IsGlobal = true;
+		strcpy(r + 2, token.c_str());
+		strncpy(room->Name, r, 29); // room name max visible length is 29
+		Server.Rooms.AddRoom(room);
+	}
+}
+
 bool InitServer(){
-#ifdef WIN32
-	EnableLogFile = GetPrivateProfileInt("NFSU:LAN", "EnableLogFile", 1, ".\\nfsu.ini");
-	EnableLogScreen = false;
-	RewriteLogFile = GetPrivateProfileInt("NFSU:LAN", "RewriteLogFile", 1, ".\\nfsu.ini");
-	DisableTimeStamp = GetPrivateProfileInt("NFSU:LAN", "DisableTimeStamp", 0, ".\\nfsu.ini");
-	Verbose = GetPrivateProfileInt("NFSU:LAN", "Verbose", 0, ".\\nfsu.ini");
-	RegisterGlobal = GetPrivateProfileInt("NFSU:LAN", "RegisterGlobal", 0, ".\\nfsu.ini");
-	LogAllTraffic = GetPrivateProfileInt("NFSU:LAN", "LogAllTraffic", 0, ".\\nfsu.ini");
-	BanV1 = GetPrivateProfileInt("NFSU:LAN", "BanV1", 0, ".\\nfsu.ini");
-	BanV2 = GetPrivateProfileInt("NFSU:LAN", "BanV2", 0, ".\\nfsu.ini");
-	BanV3 = GetPrivateProfileInt("NFSU:LAN", "BanV3", 0, ".\\nfsu.ini");
-	BanV4 = GetPrivateProfileInt("NFSU:LAN", "BanV4", 0, ".\\nfsu.ini");
-	GetPrivateProfileString("NFSU:LAN", "ServerName", "LAN Service server", Server.Name, 100, ".\\nfsu.ini");
-#endif
+	char log[1024];
+
+	char rooms_a[64] = "LAN";
+	char rooms_b[64] = "LAN";
+	char rooms_c[64] = "LAN";
+	char rooms_d[64] = "LAN";
+	char rooms_e[64] = "LAN";
+	char rooms_f[64] = "LAN";
+	char rooms_g[64] = "LAN";
+	char rooms_h[64] = "LAN";
+
+	sprintf(log, "%s NFSU:LAN server v %s starting...\n", SERVER_PLATFORM, NFSU_LAN_VERSION);
+	Log(log);
+
+	readOptionStr("ServerName", Server.Name);
+	readOptionStr("ServerIP", Server.ServerIP);
+	readOptionStr("ServerExternalIP", Server.ServerExternalIP);
+	readOptionStr("WelcomeMessage", Server.WelcomeMessage);
+	readOptionStr("WelcomeMessageType", Server.WelcomeMessageType);
+	readOptionStr("WelcomeMessageAuthor", Server.WelcomeMessageAuthor);
+	EnableLogFile = readOptionBool("EnableLogFile");
+	RewriteLogFile = readOptionBool("RewriteLogFile");
+	DisableTimeStamp = readOptionBool("DisableTimeStamp");
+	Verbose = readOptionBool("Verbose");
+	RegisterGlobal = readOptionBool("RegisterGlobal");
+	LogAllTraffic = readOptionBool("LogAllTraffic");
+	BanV1 = readOptionBool("BanV1");
+	BanV2 = readOptionBool("BanV2");
+	BanV3 = readOptionBool("BanV3");
+	BanV4 = readOptionBool("BanV4");
+
+	readOptionStr("Rooms_Ranked_Circuit", rooms_a);
+	readOptionStr("Rooms_Ranked_Sprint", rooms_b);
+	readOptionStr("Rooms_Ranked_Drift", rooms_c);
+	readOptionStr("Rooms_Ranked_Drag", rooms_d);
+	readOptionStr("Rooms_Unranked_Circuit", rooms_e);
+	readOptionStr("Rooms_Unranked_Sprint", rooms_f);
+	readOptionStr("Rooms_Unranked_Drift", rooms_g);
+	readOptionStr("Rooms_Unranked_Drag", rooms_h);
 
 	time(&curtime);
-	RoomClass *room;
 
-	room=(RoomClass*)calloc(1, sizeof(RoomClass));
-	room->IsGlobal=true;
-	strcpy(room->Name, "A.GLOBAL");
-	Server.Rooms.AddRoom(room);
-
-	/*
-	room=(RoomClass*)calloc(1, sizeof(RoomClass));
-	room->IsGlobal=true;
-	strcpy(room->Name, "A.STOCK_ONLY");
-	Server.Rooms.AddRoom(room);
-
-	room=(RoomClass*)calloc(1, sizeof(RoomClass));
-	room->IsGlobal=true;
-	strcpy(room->Name, "A.STREET_ONLY");
-	Server.Rooms.AddRoom(room);
-
-	room=(RoomClass*)calloc(1, sizeof(RoomClass));
-	room->IsGlobal=true;
-	strcpy(room->Name, "A.PRO_ONLY");
-	Server.Rooms.AddRoom(room);
-	*/
-
-	room=(RoomClass*)calloc(1, sizeof(RoomClass));
-	room->IsGlobal=true;
-	strcpy(room->Name, "B.GLOBAL");
-	Server.Rooms.AddRoom(room);
-	room=(RoomClass*)calloc(1, sizeof(RoomClass));
-	room->IsGlobal=true;
-	strcpy(room->Name, "C.GLOBAL");
-	Server.Rooms.AddRoom(room);
-	room=(RoomClass*)calloc(1, sizeof(RoomClass));
-	room->IsGlobal=true;
-	strcpy(room->Name, "D.GLOBAL");
-	Server.Rooms.AddRoom(room);
-
-	room=(RoomClass*)calloc(1, sizeof(RoomClass));
-	room->IsGlobal=true;
-	strcpy(room->Name, "E.GLOBAL");
-	Server.Rooms.AddRoom(room);
-	// tourney's room
-	room=(RoomClass*)calloc(1, sizeof(RoomClass));
-	room->IsGlobal=true;
-	strcpy(room->Name, "E.TOURNEY");
-	Server.Rooms.AddRoom(room);
-
-	room=(RoomClass*)calloc(1, sizeof(RoomClass));
-	room->IsGlobal=true;
-	strcpy(room->Name, "F.GLOBAL");
-	Server.Rooms.AddRoom(room);
-	// tourney's room
-	room=(RoomClass*)calloc(1, sizeof(RoomClass));
-	room->IsGlobal=true;
-	strcpy(room->Name, "F.TOURNEY");
-	Server.Rooms.AddRoom(room);
-
-	room=(RoomClass*)calloc(1, sizeof(RoomClass));
-	room->IsGlobal=true;
-	strcpy(room->Name, "G.GLOBAL");
-	Server.Rooms.AddRoom(room);
-	// tourney's room
-	room=(RoomClass*)calloc(1, sizeof(RoomClass));
-	room->IsGlobal=true;
-	strcpy(room->Name, "G.TOURNEY");
-	Server.Rooms.AddRoom(room);
-
-	room=(RoomClass*)calloc(1, sizeof(RoomClass));
-	room->IsGlobal=true;
-	strcpy(room->Name, "H.GLOBAL");
-	Server.Rooms.AddRoom(room);	
-	// tourney's room
-	room=(RoomClass*)calloc(1, sizeof(RoomClass));
-	room->IsGlobal=true;
-	strcpy(room->Name, "H.TOURNEY");
-	Server.Rooms.AddRoom(room);
-
-	int k;
-	char log[1024];
+	addRooms(rooms_a, 0);
+	addRooms(rooms_b, 1);
+	addRooms(rooms_c, 2);
+	addRooms(rooms_d, 3);
+	addRooms(rooms_e, 4);
+	addRooms(rooms_f, 5);
+	addRooms(rooms_g, 6);
+	addRooms(rooms_h, 7);
 
 	if(Server.Name[0]==0){
 		strcpy(Server.Name, "Default server name");
 	}
 
-	//opening logfile
+	//opening server logfile
 	if(EnableLogFile){
 		if(RewriteLogFile){
 			logfil=fopen("server.log", "w");
@@ -2711,8 +2780,8 @@ bool InitServer(){
 			sprintf(log, "Could not open logfile - logging to file will be disabled.\n");
 		}
 	}
-	
-	//opening logfile
+
+	//opening traffic logfile
 	if(LogAllTraffic){
 		tlogfil=fopen("traffic.log", "w");
 		if(tlogfil==NULL){
@@ -2721,8 +2790,46 @@ bool InitServer(){
 		}
 	}
 
-	sprintf(log, "%s NFSU:LAN server [%s] v %s starting\n", Server.Name, SERVER_PLATFORM, NFSU_LAN_VERSION);
-	Log(log);
+	if (Server.ServerIP == '\0')
+		strcpy(Server.ServerIP, "0.0.0.0");
+
+	//reading news;
+	LoadNews();
+
+	// print options
+	sprintf(log, "-----------\n");				Log(log);
+	sprintf(log, "| Options |\n");				Log(log);
+	sprintf(log, "-----------\n");				Log(log);
+	sprintf(log, "ServerName        %s\n", Server.Name);		Log(log);
+	sprintf(log, "ServerIP          %s\n", Server.ServerIP);	Log(log);
+	sprintf(log, "ServerExternalIP  %s\n", Server.ServerExternalIP);	Log(log);
+	sprintf(log, "WelcomeMessage    %s\n", Server.WelcomeMessage);		Log(log);
+	sprintf(log, "EnableLogFile     %d\n", EnableLogFile);		Log(log);
+	sprintf(log, "EnableLogScreen   %d\n", EnableLogScreen);	Log(log);
+	sprintf(log, "RewriteLogFile    %d\n", RewriteLogFile);		Log(log);
+	sprintf(log, "DisableTimeStamp  %d\n", DisableTimeStamp);	Log(log);
+	sprintf(log, "Verbose           %d\n", Verbose);			Log(log);
+	sprintf(log, "RegisterGlobal    %d\n", RegisterGlobal);		Log(log);
+	sprintf(log, "LogAllTraffic     %d\n", LogAllTraffic);		Log(log);
+	sprintf(log, "BanV1             %d\n", BanV1);				Log(log);
+	sprintf(log, "BanV2             %d\n", BanV2);				Log(log);
+	sprintf(log, "BanV3             %d\n", BanV3);				Log(log);
+	sprintf(log, "BanV4             %d\n", BanV4);				Log(log);
+
+	sprintf(log, "-----------\n");				Log(log);
+	sprintf(log, "|  Rooms  |\n");				Log(log);
+	sprintf(log, "-----------\n");				Log(log);
+	// print rooms
+	RoomClass* tmp;
+	tmp = Server.Rooms.First;
+	while (tmp != NULL) {
+		sprintf(log, "\t%s\n", tmp->Name);				Log(log);
+		tmp = tmp->Next;
+	}
+
+	sprintf(log, "-----------\n");				Log(log);
+
+
 	
 #ifdef _WIN32
 	WSAData wda;
@@ -2732,10 +2839,7 @@ bool InitServer(){
 		return false;
 	}
 #endif
-
-	//reading news;
-	LoadNews();
-	
+		
 	//making sockets
 	RedirectSocket = socket(AF_INET,SOCK_STREAM,0);
 	ListeningSocket = socket(AF_INET,SOCK_STREAM,0);
@@ -2746,15 +2850,24 @@ bool InitServer(){
 	//binding them to specific ports
 	SOCKADDR_IN localsin;
 	localsin.sin_family = AF_INET;
-	localsin.sin_addr.s_addr = INADDR_ANY;
+	if (Server.ServerIP[0] != '\0') {
+		inet_pton(AF_INET, Server.ServerIP, &(localsin.sin_addr));
+	}
+	else {
+		localsin.sin_addr.s_addr = INADDR_ANY;
+	}
 
 	localsin.sin_port = htons(10900);
+	int k;
 	k=bind(RedirectSocket,(SOCKADDR *)&localsin, sizeof(SOCKADDR_IN));
 	if(k==INVALID_SOCKET){
 		sprintf(log, "Could not bind socket to 10900.\n");
 		Log(log);
 		return false;
 	}
+	sprintf(log, "Listening for Redirector connections on %s:%d TCP\n", inet_ntoa(localsin.sin_addr), ntohs(localsin.sin_port));
+	Log(log);
+
 	localsin.sin_port = htons(10901);
 	k=bind(ListeningSocket,(SOCKADDR *)&localsin, sizeof(SOCKADDR_IN));
 	if(k==INVALID_SOCKET){
@@ -2763,6 +2876,9 @@ bool InitServer(){
 		closesocket(RedirectSocket);
 		return false;
 	}
+	sprintf(log, "Listening for Listener connections on %s:%d TCP\n", inet_ntoa(localsin.sin_addr), ntohs(localsin.sin_port));
+	Log(log);
+
 	localsin.sin_port = htons(10980);
 	k=bind(ReportingSocket,(SOCKADDR *)&localsin, sizeof(SOCKADDR_IN));
 	if(k==INVALID_SOCKET){
@@ -2772,6 +2888,9 @@ bool InitServer(){
 		closesocket(ListeningSocket);
 		return false;
 	}
+	sprintf(log, "Listening for Reporter connections on %s:%d TCP\n", inet_ntoa(localsin.sin_addr), ntohs(localsin.sin_port));
+	Log(log);
+
 	localsin.sin_port = htons(10800);
 	k=bind(ClientReportingSocket,(SOCKADDR *)&localsin, sizeof(SOCKADDR_IN));
 	if(k==INVALID_SOCKET){
@@ -2782,6 +2901,8 @@ bool InitServer(){
 		closesocket(ReportingSocket);
 		return false;
 	}
+	sprintf(log, "Listening for ClientReporter connections on %s:%d UDP\n", inet_ntoa(localsin.sin_addr), ntohs(localsin.sin_port));
+	Log(log);
 
 	localsin.sin_port = htons(10800);
 	k=bind(ClientReportingSocketTcp,(SOCKADDR *)&localsin, sizeof(SOCKADDR_IN));
@@ -2794,6 +2915,8 @@ bool InitServer(){
 		closesocket(ClientReportingSocket);
 		return false;
 	}
+	sprintf(log, "Listening for ClientReporterTcp connections on %s:%d TCP\n", inet_ntoa(localsin.sin_addr), ntohs(localsin.sin_port));
+	Log(log);
 
 	//listen to ports
 	listen(RedirectSocket, 100);
@@ -3148,9 +3271,6 @@ int main(int argc, char* argv[]){
 #endif
 		if(stricmp(argv[k], "enablelogfile")==0){
 			EnableLogFile=true;
-		}
-		if(stricmp(argv[k], "disablelogfile")==0){
-			EnableLogFile=false;
 		}
 		if(stricmp(argv[k], "registerglobal")==0){
 			RegisterGlobal=true;
