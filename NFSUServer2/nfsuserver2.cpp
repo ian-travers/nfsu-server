@@ -2452,20 +2452,13 @@ threadfunc StatThread(void *Dummy){
 			// 2013-10-29
 			// add ban TJ cheat status (0 - disabled / 1 - enabled)
 			// add players in race info
-			if (BanCheater) {
-				ban_tj_cheat = 1;
-			}else{
-				ban_tj_cheat = 0;
-			}
+			ban_tj_cheat = BanCheater ? 1 : 0;
+			
 			players_in_race = Sessions.Count;
 			// 2014-06-01
 			// add ban room creation status (0 - disabled / 1 - enabled)
-			if (BanRoom) {
-				ban_room_creation = 1;
-			} else {
-				ban_room_creation = 0;
-			}
-
+			ban_room_creation = BanRoom ? 1 : 0;
+			
 			sprintf(tempBuff, "%u|%u|%u|%s|%s|%s|%u|%u|%u~~~", ClientConnections.Count, Server.Rooms.Count, status, SERVER_PLATFORM, NFSU_LAN_VERSION, Server.Name, ban_tj_cheat, players_in_race, ban_room_creation);
 			send(cl, tempBuff, strlen(tempBuff), 0);
 
@@ -2743,6 +2736,9 @@ bool InitServer(){
 	BanV2 = readOptionBool("BanV2");
 	BanV3 = readOptionBool("BanV3");
 	BanV4 = readOptionBool("BanV4");
+	
+	BanRoom = readOptionBool("BanRoomsCreation");
+	BanCheater = readOptionBool("BanCheater");
 
 	readOptionStr("Rooms_Ranked_Circuit", rooms_a);
 	readOptionStr("Rooms_Ranked_Sprint", rooms_b);
@@ -2815,6 +2811,9 @@ bool InitServer(){
 	sprintf(log, "BanV2             %d\n", BanV2);				Log(log);
 	sprintf(log, "BanV3             %d\n", BanV3);				Log(log);
 	sprintf(log, "BanV4             %d\n", BanV4);				Log(log);
+
+	sprintf(log, "BanRoomsCreation  %d\n", BanRoom);			Log(log);
+	sprintf(log, "BanCheater        %d\n", BanCheater);				Log(log);
 
 	sprintf(log, "-----------\n");				Log(log);
 	sprintf(log, "|  Rooms  |\n");				Log(log);
