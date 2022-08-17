@@ -2855,7 +2855,7 @@ bool InitServer(){
 	else {
 		localsin.sin_addr.s_addr = INADDR_ANY;
 	}
-
+	
 	localsin.sin_port = htons(10900);
 	int k;
 	k=bind(RedirectSocket,(SOCKADDR *)&localsin, sizeof(SOCKADDR_IN));
