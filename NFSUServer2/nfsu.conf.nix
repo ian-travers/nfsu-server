@@ -19,18 +19,19 @@ serverip =
 serverexternalip =
 
 # user receive this text when enter a room [set empty to disable]
-# 
+#
 # type might be: 'b', 'p', 'a', 'm', 'h'
 # 'b' - prefix '*broadcast*', color white
 # 'p' - purple color without prefix (like the private message)
 # 'a' - prefix '(admin)', color green
-# 'm' - prefix '(mod)', color green 
+# 'm' - prefix '(mod)', color green
 # 'h' - prefix '(host)', color green
 #
 # author is optional and located at the very beginning
-welcomemessage =
-welcomemessagetype = 
-welcomemessageauthor = 
+welcomemessage = Hello there and Welcome to the Server! Good Luck! :)
+welcomemessagetype = b
+welcomemessageauthor =
+
 
 # enable logging to file server.log [0|1]
 enablelogfile = 1
@@ -48,7 +49,7 @@ disabletimestamp = 0
 verbose = 0
 
 # enable server traffic logging in a separate file
-logalltraffic = 1
+logalltraffic = 0
 
 # (different game clients are incompatible to play)
 # do not allow users to connect with game version 1.1*
