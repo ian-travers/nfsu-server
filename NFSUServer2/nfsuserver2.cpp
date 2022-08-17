@@ -2786,7 +2786,7 @@ bool InitServer(){
 		}
 	}
 
-	if (Server.ServerIP == '\0')
+	if (Server.ServerIP[0] == '\0')
 		strcpy(Server.ServerIP, "0.0.0.0");
 
 	//reading news;
