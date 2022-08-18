@@ -18,7 +18,7 @@ Download static binary from [Releases](https://github.com/ian-travers/nfsu-serve
 
 ```
 apt-get install git make build-essential
-git clone https://github.com/nfsu-server/nfsu-server.git
+git clone https://github.com/ian-travers/nfsu-server.git
 cd nfsuserver/nfsuserver
 make
 ./nfsuserver
