@@ -1,4 +1,4 @@
-// nfsuserver2.cpp : Defines the entry point for the console application.
+// nfsuserver.cpp : Defines the entry point for the console application.
 //
 #ifdef _WIN32
 	#pragma comment(lib, "ws2_32.lib")
@@ -100,7 +100,7 @@ extern std::vector<StarsDrift> S1306;
 extern std::vector<StarsDrift> S1307;
 extern std::vector<StarsDrift> S1308;
 
-#define NFSU_LAN_VERSION "2.5"
+#define NFSU_LAN_VERSION "2.6"
 #define DEFAULT_NEWS "-=-=-=-\nDefault news\nPlz tell server admin to make news.txt file ;)\n-=-=-=-=-"
 
 extern ServerClass Server; //core ;)
