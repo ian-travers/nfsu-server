@@ -206,7 +206,7 @@ bool IsValidCar(const unsigned char wei, const unsigned char sus, const unsigned
 	tur_l = (tur >> 1) & 0x03;
 	nos_l = (nos >> 1) & 0x03;
 	ecu_l = (ecu >> 1) & 0x03;
-	wei_l = (tra >> 1) & 0x03;
+	tra_l = (tra >> 1) & 0x03;
 	tir_l = (tir >> 1) & 0x03;
 	bra_l = (bra >> 1) & 0x03;
 	
